@@ -2,7 +2,7 @@
  * system.c - general hardware support functions
  * Part of Kinen project
  *
- * Copyright (c) 2013 Alden S. Hart Jr.
+ * Copyright (c) 2012 - 2013 Alden S. Hart Jr.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -17,9 +17,7 @@
 #include <stddef.h> 
 #include <avr\pgmspace.h> 
 
-//#include "tinyg.h"
 #include "system.h"
-//#include "xmega/xmega_init.h"
 
 /*
  * sys_init() - lowest level hardware init
@@ -27,6 +25,5 @@
 
 void sys_init() 
 {
-//	xmega_init();		// set system clock
-//	sys_port_bindings(TINYG_HARDWARE_VERSION);
+//	PRR = 0xFF;	// turn off all peripherals. Each device needs to enble itself
 }

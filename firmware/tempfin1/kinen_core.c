@@ -27,7 +27,6 @@
  */
 void kinen_init(void)
 {
-//	kinen_master_init();
 	kinen_slave_init();
 }
 
@@ -43,6 +42,7 @@ void kinen_init(void)
  *	Returns EAGAIN if the function should block lower-priority functions
  *	in the main DISPATCH loop
  */
+ /*
 uint8_t kinen_callback(void)
 {
 //	return (SC_OK);			// return from a successful operation
@@ -50,3 +50,4 @@ uint8_t kinen_callback(void)
 	return (SC_NOOP);		// return if no operation was performed 
 }
 
+*/

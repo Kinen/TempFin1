@@ -17,7 +17,7 @@
 #ifndef tempfin1_h
 #define tempfin1_h
 
-#define BUILD_NUMBER 001.10		// for keeping track of git revisions
+#define BUILD_NUMBER 001.11		// for keeping track of git revisions
 
 // Device function prototypes
 
@@ -26,8 +26,8 @@
 
 void device_init(void);
 void device_reset(void);
-uint8_t device_read_byte(uint8_t addr, uint8_t *data);
-uint8_t device_write_byte(uint8_t addr, uint8_t data);
+//uint8_t device_read_byte(uint8_t addr, uint8_t *data);
+//uint8_t device_write_byte(uint8_t addr, uint8_t data);
 
 void heater_init(void);
 void heater_on(double setpoint);
@@ -68,7 +68,7 @@ void led_off(void);
 void led_toggle(void);
 
 /**** Device configuration for Kinen (+++this needs to change) ****/
-
+/*
 #define DEVICE_WAIT_TIME 10				// 10 = 100 uSeconds
 
 #define DEVICE_TYPE 	 DEVICE_TYPE_TEMPERATURE_CONTROLLER
@@ -79,6 +79,7 @@ void led_toggle(void);
 #define DEVICE_UUID_1	 0x00			// UUID = 0 means there is no UUID
 #define DEVICE_UUID_2	 0x00			// UUID = 0 means there is no UUID
 #define DEVICE_UUID_3	 0x00			// UUID = 0 means there is no UUID
+*/
 
 /**** Heater default parameters ***/
 
@@ -257,17 +258,16 @@ enum deviceRegisters {
 // I prefer these to be static in the main file itself but the scope needs to 
 // be made global to allow the report.c functions to get at the variables
 
-struct DeviceStruct {			// hardware devices that are part of the chip
+typedef struct DeviceStruct {	// hardware devices that are part of the chip
 	uint8_t tick_flag;			// true = the timer interrupt fired
 	uint8_t tick_10ms_count;	// 10ms down counter
 	uint8_t tick_100ms_count;	// 100ms down counter
 	uint8_t tick_1sec_count;	// 1 second down counter
 	double pwm_freq;			// save it for stopping and starting PWM
 	uint8_t array[DEVICE_ADDRESS_MAX]; // byte array for Kinen communications
-};
-typedef struct DeviceStruct Device;
+} Device;
 
-struct HeaterStruct {
+typedef struct HeaterStruct {
 	uint8_t state;				// heater state
 	uint8_t code;				// heater code (more information about heater state)
 	uint8_t	toggle;
@@ -282,10 +282,9 @@ struct HeaterStruct {
 	double regulation_timeout;	// timeout beyond which regulation has failed (seconds)
 	double ambient_temperature;	// temperature below which it's ambient temperature (heater failed)
 	double overheat_temperature;// overheat temperature (cutoff temperature)
-};
-typedef struct HeaterStruct Heater;
+} Heater;
 
-struct PIDstruct {				// PID controller itself
+typedef struct PIDstruct {		// PID controller itself
 	uint8_t state;				// PID state (actually very simple)
 	uint8_t code;				// PID code (more information about PID state)
 	double output;				// also used for anti-windup on integral term
@@ -299,10 +298,9 @@ struct PIDstruct {				// PID controller itself
 	double Kp;					// proportional gain
 	double Ki;					// integral gain 
 	double Kd;					// derivative gain
-};
-typedef struct PIDstruct PID;
+} PID;
 
-struct SensorStruct {
+typedef struct SensorStruct {
 	uint8_t state;				// sensor state
 	uint8_t code;				// sensor return code (more information about state)
 	uint8_t sample_idx;			// index into sample array
@@ -315,8 +313,7 @@ struct SensorStruct {
 	double no_power_temperature;	// bogus temperature indicates no power to thermocouple amplifier
 	double sample[SENSOR_SAMPLES];	// array of sensor samples in a reading
 	double test;
-};
-typedef struct SensorStruct Sensor;
+} Sensor;
 
 // structure allocations
 Device device;					// Device is always a singleton (there is only one device)

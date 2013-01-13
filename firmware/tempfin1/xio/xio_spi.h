@@ -1,23 +1,9 @@
 /*
  * xio_spi.h	- General purpose SPI device driver for xmega family
  * 				- works with avr-gcc stdio library
+ * Part of Kinen project
  *
- * Part of TinyG project
- *
- * Copyright (c) 2013 Alden S. Hart Jr.
- *
- * TinyG is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by 
- * the Free Software Foundation, either version 3 of the License, 
- * or (at your option) any later version.
- *
- * TinyG is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of 
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the GNU General Public License for details.
- *
- * You should have received a copy of the GNU General Public License 
- * along with TinyG  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2012 - 2013 Alden S. Hart Jr.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -34,13 +20,6 @@
 /******************************************************************************
  * SPI DEVICE CONFIGS (applied during device-specific inits)
  ******************************************************************************/
-
-// SPI global accessor defines
-#define SPI1 ds[XIO_DEV_SPI1]				// device struct accessor
-#define SPI1u sp[XIO_DEV_SPI1 - XIO_DEV_SPI_OFFSET]	// usart extended struct accessor
-
-#define SPI2 ds[XIO_DEV_SPI2]				// device struct accessor
-#define SPI2u sp[XIO_DEV_SPI2 - XIO_DEV_SPI_OFFSET]	// usart extended struct accessor
 
 // Buffer sizing
 #define SPIBUF_T uint_fast8_t				// fast, but limits SPI buffers to 255 char max
@@ -100,17 +79,14 @@
  * Note: As defined this struct won't do buffers larger than 256 chars - 
  *	     or a max of 254 characters usable
  */
-
 typedef struct xioSPI {
-//	USART_t *usart;					// USART used for SPI (unless it's bit banged)
-//	PORT_t *data_port;				// port used for data transmission (MOSI, MOSI, SCK)
-//	PORT_t *ssel_port;				// port used for slave select
-	uint8_t ssbit;					// slave select bit used for this device
-
-	volatile BUFFER_T rx_buf_tail;	// RX buffer read index
-	volatile BUFFER_T rx_buf_head;	// RX buffer write index (written by ISR)
+	volatile BUFFER_T rx_buf_tail;				// RX buffer read index
+	volatile BUFFER_T rx_buf_head;				// RX buffer write index (written by ISR)
+	volatile BUFFER_T tx_buf_tail;				// TX buffer read index  (written by ISR)
+	volatile BUFFER_T tx_buf_head;				// TX buffer write index
 
 	volatile char rx_buf[SPI_RX_BUFFER_SIZE];	// (may be written by an ISR)
+	volatile char tx_buf[SPI_TX_BUFFER_SIZE];	// (may be written by an ISR)
 } xioSpi;
 
 /******************************************************************************

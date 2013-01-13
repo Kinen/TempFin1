@@ -2,7 +2,7 @@
  * xio_usart.h - Common USART definitions 
  * Part of Kinen project
  *
- * Copyright (c) 2010 - 2013 Alden S. Hart Jr.
+ * Copyright (c) 2012 - 2013 Alden S. Hart Jr.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -29,38 +29,6 @@
 
 #define USART_FLAGS (XIO_BLOCK |  XIO_ECHO | XIO_XOFF | XIO_LINEMODE )
 
-/* 
- * Serial Configuration Settings
- *
- * 	Serial config settings are here because various modules will be opening devices
- *	The BSEL / BSCALE values provided below assume a 32 Mhz clock
- *	Assumes CTRLB CLK2X bit (0x04) is not enabled
- *	These are carried in the bsel and bscale tables in xio_usart.c
- */
-
-// Baud rate configuration
-#define	XIO_BAUD_DEFAULT XIO_BAUD_115200
-
-enum xioBAUDRATES {         		// BSEL	  BSCALE
-		XIO_BAUD_UNSPECIFIED = 0,	//	0		0	  // use default value
-		XIO_BAUD_9600,				//	207		0
-		XIO_BAUD_19200,				//	103		0
-		XIO_BAUD_38400,				//	51		0
-		XIO_BAUD_57600,				//	34		0
-		XIO_BAUD_115200,			//	33		(-1<<4)
-		XIO_BAUD_230400,			//	31		(-2<<4)
-		XIO_BAUD_460800,			//	27		(-3<<4)
-		XIO_BAUD_921600,			//	19		(-4<<4)
-		XIO_BAUD_500000,			//	1		(1<<4)
-		XIO_BAUD_1000000			//	1		0
-};
-
-enum xioFCState { 
-		FC_DISABLED = 0,			// flo control is disabled
-		FC_IN_XON,					// normal, un-flow-controlled state
-		FC_IN_XOFF					// flow controlled state
-};
-
 /******************************************************************************
  * STRUCTURES 
  ******************************************************************************/
@@ -70,9 +38,6 @@ enum xioFCState {
  *	     or a max of 254 characters usable
  */
 typedef struct xioUSART {
-//	uint8_t fc_char;			 			// flow control character to send
-//	volatile uint8_t fc_state;				// flow control state
-
 	volatile BUFFER_T rx_buf_tail;			// RX buffer read index
 	volatile BUFFER_T rx_buf_head;			// RX buffer write index (written by ISR)
 	volatile BUFFER_T tx_buf_tail;			// TX buffer read index  (written by ISR)

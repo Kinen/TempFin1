@@ -30,7 +30,8 @@ ADDITIONAL_DEPENDENCIES:=
 OUTPUT_FILE_DEP:=
 
 # Every subdirectory with source files must be described here
-SUBDIRS := 
+SUBDIRS :=  \
+../xio
 
 
 # Add inputs and outputs from these tool invocations to the build variables 
@@ -39,9 +40,13 @@ C_SRCS +=  \
 ../kinen_slave_328p.c \
 ../print.c \
 ../report.c \
-../serial.c \
+../system.c \
 ../tempfin1.c \
-../util.c
+../util.c \
+../xio/xio.c \
+../xio/xio_signals.c \
+../xio/xio_spi.c \
+../xio/xio_usart.c
 
 
 PREPROCESSING_SRCS += 
@@ -55,9 +60,13 @@ kinen_core.o \
 kinen_slave_328p.o \
 print.o \
 report.o \
-serial.o \
+system.o \
 tempfin1.o \
-util.o
+util.o \
+xio/xio.o \
+xio/xio_signals.o \
+xio/xio_spi.o \
+xio/xio_usart.o
 
 
 OBJS_AS_ARGS +=  \
@@ -65,9 +74,13 @@ kinen_core.o \
 kinen_slave_328p.o \
 print.o \
 report.o \
-serial.o \
+system.o \
 tempfin1.o \
-util.o
+util.o \
+xio/xio.o \
+xio/xio_signals.o \
+xio/xio_spi.o \
+xio/xio_usart.o
 
 
 C_DEPS +=  \
@@ -75,9 +88,13 @@ kinen_core.d \
 kinen_slave_328p.d \
 print.d \
 report.d \
-serial.d \
+system.d \
 tempfin1.d \
-util.d
+util.d \
+xio/xio.d \
+xio/xio_signals.d \
+xio/xio_spi.d \
+xio/xio_usart.d
 
 
 C_DEPS_AS_ARGS +=  \
@@ -85,9 +102,13 @@ kinen_core.d \
 kinen_slave_328p.d \
 print.d \
 report.d \
-serial.d \
+system.d \
 tempfin1.d \
-util.d
+util.d \
+xio/xio.d \
+xio/xio_signals.d \
+xio/xio_spi.d \
+xio/xio_usart.d
 
 
 OUTPUT_FILE_PATH +=tempfin1.elf
@@ -114,7 +135,21 @@ OUTPUT_FILE_DEP:= ./makedep.mk
 
 
 
+
+
+
+
+
+
+
+
 ./%.o: .././%.c
+	@echo Building file: $<
+	@echo Invoking: AVR/GNU C Compiler : (AVR_8_bit_GNU_Toolchain_3.4.0_663) 4.6.2
+	$(QUOTE)C:\Program Files\Atmel\Atmel Studio 6.0\extensions\Atmel\AVRGCC\3.4.0.65\AVRToolchain\bin\avr-gcc.exe$(QUOTE) -funsigned-char -funsigned-bitfields -O1 -fpack-struct -fshort-enums -g2 -Wall -c -std=gnu99 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -mmcu=atmega328p   -o"$@" "$<" 
+	@echo Finished building: $<
+
+xio/%.o: ../xio/%.c
 	@echo Building file: $<
 	@echo Invoking: AVR/GNU C Compiler : (AVR_8_bit_GNU_Toolchain_3.4.0_663) 4.6.2
 	$(QUOTE)C:\Program Files\Atmel\Atmel Studio 6.0\extensions\Atmel\AVRGCC\3.4.0.65\AVRToolchain\bin\avr-gcc.exe$(QUOTE) -funsigned-char -funsigned-bitfields -O1 -fpack-struct -fshort-enums -g2 -Wall -c -std=gnu99 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"  -mmcu=atmega328p   -o"$@" "$<" 

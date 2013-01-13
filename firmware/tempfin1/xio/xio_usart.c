@@ -71,8 +71,8 @@ static struct cfgUSART const cfgUsart[] PROGMEM = {
 };
 
 // Fast accessors
-#define USART ds[XIO_DEV_USART]
-#define USARTx us[XIO_DEV_USART - XIO_DEV_USART_OFFSET]
+#define USART ds[XIO_DEV_USART]							// device struct accessor
+#define USARTx us[XIO_DEV_USART - XIO_DEV_USART_OFFSET]	// usart extended struct accessor
 
 /******************************************************************************
  * FUNCTIONS
@@ -82,6 +82,8 @@ static int _gets_helper(xioDev *d, xioUsart *dx);
 
 /*
  *	xio_init_usart() - general purpose USART initialization (shared)
+ *
+ *	This generic init() requires open() to be performed to complete the device init
  */
 void xio_init_usart(void)
 {
@@ -97,34 +99,34 @@ void xio_init_usart(void)
 }
 
 /*
- *	xio_open_usart() - general purpose USART open (shared)
+ *	xio_open_usart() - general purpose USART open
  *	xio_set_baud_usart() - baud rate setting routine
+ *
+ *	The open() function assumes that init() has been run previously
  */
 FILE *xio_open_usart(const uint8_t dev, const char *addr, const CONTROL_T flags)
 {
-	xioDev *d = &ds[dev];							// setup device struct pointer
+	// setup pointers and references
+	xioDev *d = &ds[dev];							// main device struct pointer
 	uint8_t idx = dev - XIO_DEV_USART_OFFSET;		// index into USART extended structures
-	d->x = &us[idx];								// bind extended struct to device
+	d->x = (xioUsart *)&us[idx];					// bind extended struct to device
 	xioUsart *dx = (xioUsart *)d->x;				// dx is a convenience / efficiency
+	memset (dx, 0, sizeof(xioUsart));				// zro out the extended struct
 
-	memset (dx, 0, sizeof(xioUsart));				// clear all values
+	// setup internals
 	xio_ctrl_generic(d, flags);						// setup control flags	
-
-	// setup internal RX/TX control buffers
-	dx->rx_buf_head = 1;		// can't use location 0 in circular buffer
+	dx->rx_buf_head = 1;							// can't use location 0 in circular buffer
 	dx->rx_buf_tail = 1;
 	dx->tx_buf_head = 1;
 	dx->tx_buf_tail = 1;
 
+	// setup the hardware
+	PRR &= ~PRUSART0_bm;		// Enable the USART in the power reduction register (system.h)
 	UCSR0A = (uint8_t)pgm_read_byte(&cfgUsart[idx].ucsra_init);
 	UCSR0B = (uint8_t)pgm_read_byte(&cfgUsart[idx].ucsrb_init);
-
 	xio_set_baud_usart(dx,pgm_read_dword(&cfgUsart[idx].baud));
 
-//	uint32_t baud = (uint32_t)pgm_read_dword(&cfgUsart[idx].baud);
-//	xio_set_baud_usart(dx,baud);
-
-	return (&d->file);		// return FILE reference
+	return (&d->file);								// return stdio FILE reference
 }
 
 void xio_set_baud_usart(xioUsart *dx, const uint32_t baud)

@@ -89,10 +89,10 @@
     <Compile Include="report.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="serial.c">
+    <Compile Include="system.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="serial.h">
+    <Compile Include="system.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="tempfin1.c">
@@ -107,11 +107,38 @@
     <Compile Include="util.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="xio\xio.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio_signals.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio_signals.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio_spi.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio_spi.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio_usart.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio_usart.h">
+      <SubType>compile</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md">
       <SubType>compile</SubType>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="xio" />
   </ItemGroup>
   <Import Project="$(AVRSTUDIO_EXE_PATH)\\Vs\\Compiler.targets" />
 </Project>

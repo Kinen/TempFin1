@@ -25,26 +25,26 @@
 #include "kinen_core.h"
 #include "kinen_slave_328p.h"
 #include "tempfin1.h"			// main device file
-
+/*
 static struct KinenSlaveSingleton {
 	uint8_t	phase;				// byte phasing for RX
 	uint8_t addr;				// address received from master
 	uint8_t data;				// data received from master or to send to master
 } ki_slave;
-
-static uint8_t _slave_write_byte(const uint8_t addr, const uint8_t data);
-
+*/
 /*
  * kinen_slave_init() - setup atmega SPI peripheral to be the OCB slave 
  */
 void kinen_slave_init(void)
 {
-
+/*
 //	PRR |= 0x07;				// don't screw with the power reduction register
 	DDRB &= ~(1<<DDB4);			// Set MISO output, all others unaffected
 	SPCR = (1<<SPIE | 1<<SPE);	// Enable SPI and its interrupt, set MSB first, slave mode
 	SPCR = (1<<CPOL | 1<<CPHA);	// Uncomment for mode 3 operation, comment for mode 0
-	memset(&ki.array, 0, sizeof(ki.array));
+*/
+/*
+//	memset(&ki.array, 0, sizeof(ki.array));
 
 	ki_wait_time = DEVICE_WAIT_TIME;	// setup read-only values
 	ki_device_type = DEVICE_TYPE;
@@ -58,6 +58,7 @@ void kinen_slave_init(void)
 
 	ki_status = SC_OK;
 	SPDR = ki_status;
+*/
 }
 
 /* 
@@ -65,6 +66,7 @@ void kinen_slave_init(void)
  *
  * Uses a 2 phase state machine to toggle back and forth between ADDR and DATA bytes
  */
+/*
 ISR(SPI_STC_vect)
 {
 	// receive address byte
@@ -98,10 +100,12 @@ ISR(SPI_STC_vect)
 		}
 	}
 }
+*/
 
 /* 
  * _slave_write_byte() - helper to write byte to a non-device address
  */
+/*
 static uint8_t _slave_write_byte(const uint8_t addr, const uint8_t data)
 {
 	if (addr == KINEN_COMMAND) {
@@ -120,3 +124,4 @@ static uint8_t _slave_write_byte(const uint8_t addr, const uint8_t data)
 	return (SC_OK);
 }
 
+*/

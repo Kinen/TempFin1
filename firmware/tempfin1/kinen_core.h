@@ -21,65 +21,17 @@
 // function prototypes
 
 void kinen_init(void);
-uint8_t kinen_callback(void);
+//uint8_t kinen_callback(void);
 
 // Kinen core singleton
 
-struct KinenCoreSingleton {
+typedef struct KinenCoreSingleton {
 	uint8_t kinen_master;		// set 'true' if this is a master
-	uint8_t array[16];			// it's here so it can be used by both master and slave
-};
-typedef struct KinenCoreSingleton KinenCore;
+//	uint8_t array[16];			// it's here so it can be used by both master and slave
+} KinenCore;
 KinenCore ki;					// allocate the singleton
 
 // Kinen definitions
-
-#define KINEN_ERR_BYTE 0xA5
-#define KINEN_OK_BYTE 0x5A
-
-#define KINEN_ADDR 0		// SPI phasing
-#define KINEN_DATA 1
-
-#define KINEN_READ 0		// Command register values
-#define KINEN_WRITE 1
-
-enum KINENCommon {  		// all are read-only except as noted
-	KINEN_COMMAND = 0,		// writable
-	KINEN_STATUS,
-	KINEN_POLL,
-	KINEN_WAIT_TIME,
-	KINEN_ADDR_PAGE,		// writable
-	KINEN_RESET,			// writable
-	KINEN_RESERVED1,
-	KINEN_RESERVED2,
-	KINEN_DEVICE_TYPE,
-	KINEN_DEVICE_ID_HI,
-	KINEN_DEVICE_ID_LO,
-	KINEN_DEVICE_REV_MAJOR,
-	KINEN_DEVICE_REV_MINOR,
-	KINEN_DEVICE_UUID_1,
-	KINEN_DEVICE_UUID_2,
-	KINEN_DEVICE_UUID_3,
-	KINEN_COMMON_MAX		// always last
-};
-
-// Alias core registers
-
-#define ki_command 			ki.array[KINEN_COMMAND]
-#define ki_status			ki.array[KINEN_STATUS]
-#define ki_poll				ki.array[KINEN_POLL]
-#define ki_wait_time		ki.array[KINEN_WAIT_TIME]
-#define ki_addr_page		ki.array[KINEN_ADDR_PAGE]
-#define ki_reset			ki.array[KINEN_RESET]
-#define ki_device_type		ki.array[KINEN_DEVICE_TYPE]
-#define ki_device_id_hi		ki.array[KINEN_DEVICE_ID_HI]
-#define ki_device_id_lo		ki.array[KINEN_DEVICE_ID_LO]
-#define ki_device_rev_major ki.array[KINEN_DEVICE_REV_MAJOR]
-#define ki_device_rev_minor ki.array[KINEN_DEVICE_REV_MINOR]
-#define ki_device_uuid_1 	ki.array[KINEN_DEVICE_UUID_1]
-#define ki_device_uuid_2 	ki.array[KINEN_DEVICE_UUID_2]
-#define ki_device_uuid_3 	ki.array[KINEN_DEVICE_UUID_3]
-
 
 // Kinen Device Types	(this might be best in a separate kinen_defs.h file)
 

@@ -2,22 +2,9 @@
  * xio_spi.c	- General purpose SPI device driver for xmega family
  * 				- works with avr-gcc stdio library
  *
- * Part of TinyG project
+ * Part of Kinen project
  *
  * Copyright (c) 2013 Alden S. Hart Jr.
- *
- * TinyG is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by 
- * the Free Software Foundation, either version 3 of the License, 
- * or (at your option) any later version.
- *
- * TinyG is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of 
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the GNU General Public License for details.
- *
- * You should have received a copy of the GNU General Public License 
- * along with TinyG  If not, see <http://www.gnu.org/licenses/>.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -50,7 +37,8 @@
  *		treated as any other non-special ASCII character.
  *
  *		NULs (0x00) are not transmitted in either direction (e.g. string terminations).
- *		Depending on the master or slave internals, it may convert NULs to NLs. 
+ *		Depending on the master or slave internals, it may convert internal string 
+ *		terminating NULs to NLs for transmission. 
  *
  *	- A slave is always in RX state - it must always be able to receive message data (MOSI).
  *
@@ -61,10 +49,10 @@
  *		slave. It's just IO.
  *
  *		If the slave has no data to send it should return ETX (0x03) on MISO. This is 
- *		useful to distinghuish between an "empty" slave and an unpopulated or non-
- *		responsive SPI slave - which would return NULs or possibly 0xFF.
+ *		useful to distinghuish between an "empty" slave and a non-responsive SPI slave or
+ *		unpopulated Kinen socket - which would return NULs or possibly 0xFFs.
  *
- *	- The master may poll for more message data from the slave by sending STX chars to
+ *	- The master may poll for message data from the slave by sending STX chars to
  *		the slave. The slave discards all STXs and simply returns output data on these
  *		transfers. Presumably the master would stop polling once it receives an ETX 
  *		from the slave.
@@ -81,8 +69,6 @@
 #include <avr/sleep.h>					// needed for blocking TX
 
 #include "xio.h"						// includes for all devices are in here
-//#include "../xmega/xmega_interrupts.h"
-//#include "../tinyg.h"					// needed for AXES definition
 
 // statics
 static int _gets_helper(xioDev *d, xioSpi *dx);
@@ -99,14 +85,11 @@ struct cfgSPI {
 	x_getc x_getc;
 	x_putc x_putc;
 	fc_func fc_func;
-//	USART_t *usart;
-//	PORT_t *comm_port;		// port for SCK, MISO and MOSI
-//	PORT_t *ssel_port;		// port for slave select line
-//	uint8_t ssbit;			// slave select bit on ssel_port
-//	uint8_t inbits; 
-//	uint8_t outbits; 
-//	uint8_t outclr;
-//	uint8_t outset; 
+
+	// initialization values
+	uint32_t baud; 			// baud rate as a long
+	uint8_t ucsra_init;		// initialization value for usart control/status register A
+	uint8_t ucsrb_init;		// initialization value for usart control/status register B
 };
 
 static struct cfgSPI const cfgSpi[] PROGMEM = {
@@ -117,16 +100,16 @@ static struct cfgSPI const cfgSpi[] PROGMEM = {
 	xio_getc_spi,			// stdio getc function
 	xio_putc_spi,			// stdio putc function
 	xio_fc_null,			// flow control callback
-//	BIT_BANG,				// usart structure or BIT_BANG if none
-//	&SPI_DATA_PORT,			// SPI comm port
-//	&SPI_SS1_PORT,			// SPI slave select port
-//	SPI_SS1_bm,				// slave select bit bitmask
-//	SPI_INBITS_bm,
-//	SPI_OUTBITS_bm,
-//	SPI_OUTCLR_bm,
-//	SPI_OUTSET_bm,
+
+	115200,					// baud rate
+	0,						// turns baud doubler off
+	( 1<<RXCIE0 | 1<<TXEN0 | 1<<RXEN0)  // enable recv interrupt, TX and RX
 }
 };
+
+// fast accessors
+#define SPI ds[XIO_DEV_SPI]							// device struct accessor
+#define SPIx sp[XIO_DEV_SPI - XIO_DEV_SPI_OFFSET]	// SPI extended struct accessor
 
 /******************************************************************************
  * FUNCTIONS
@@ -164,6 +147,13 @@ FILE *xio_open_spi(const uint8_t dev, const char *addr, const CONTROL_T flags)
 	// setup internal RX/TX control buffers
 	dx->rx_buf_head = 1;		// can't use location 0 in circular buffer
 	dx->rx_buf_tail = 1;
+	dx->tx_buf_head = 1;
+	dx->tx_buf_tail = 1;
+
+	PRR &= ~PRSPI_bm;			// Enable SPI in the power reduction register (system.h)
+	DDRB &= ~(1<<DDB4);			// Set MISO output, all others unaffected
+	SPCR = (1<<SPIE | 1<<SPE);	// Enable SPI and its interrupt, set MSB first, slave mode
+	SPCR = (1<<CPOL | 1<<CPHA);	// Uncomment for mode 3 operation, comment for mode 0
 
 	// structure and device bindings and setup
 /*
@@ -288,6 +278,47 @@ int xio_getc_spi(FILE *stream)
 		dx->rx_buf[dx->rx_buf_head] = c_spi;	// write SPI char into the buffer	
 	}
 	return (c_buf);
+}
+
+/* 
+ * SPI Slave RX Interrupt() - interrupts on byte received
+ *
+ * Uses a 2 phase state machine to toggle back and forth between ADDR and DATA bytes
+ */
+ISR(SPI_STC_vect)
+{
+/*
+	// receive address byte
+	if (ki_slave.phase == KINEN_ADDR) {
+		ki_slave.phase = KINEN_DATA;	// advance phase
+		ki_slave.addr = SPDR;		// read and save the address byte
+		if (ki_command == KINEN_WRITE) { // write is simple...
+			SPDR = KINEN_OK_BYTE;			// already saved addr, now return an OK
+		} else {
+			if (ki_slave.addr < KINEN_COMMON_MAX) {	// handle OCB address space
+				SPDR = ki.array[ki_slave.addr];
+			} else {								// handle device address space
+				if ((ki_status = device_read_byte(ki_slave.addr, &ki_slave.data)) == SC_OK) {
+					SPDR = ki_slave.data;
+				} else {
+					SPDR = KINEN_ERR_BYTE;
+				}
+			}
+		}
+
+	// receive data byte
+	} else {
+		ki_slave.phase = KINEN_ADDR;	// advance phase
+		ki_slave.data = SPDR;		// read and save the data byte
+		if (ki_command == KINEN_WRITE) {
+			if (ki_slave.addr < KINEN_COMMON_MAX) {
+				ki_status = _slave_write_byte(ki_slave.addr, ki_slave.data);
+			} else {
+				ki_status = device_write_byte(ki_slave.addr, ki_slave.data);
+			}
+		}
+	}
+*/
 }
 
 /*

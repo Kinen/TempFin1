@@ -15,7 +15,7 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -gdwarf-2 -std=gnu99         -DF_CPU=16000000UL -Os -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
+CFLAGS += -Wall -gdwarf-2 -std=gnu99                     -DF_CPU=16000000UL -Os -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d 
 
 ## Assembly specific flags
@@ -25,7 +25,7 @@ ASMFLAGS += -x assembler-with-cpp -Wa,-gdwarf2
 
 ## Linker flags
 LDFLAGS = $(COMMON)
-LDFLAGS +=  -Wl,-Map=tempfin1.map
+LDFLAGS += -Wl,-u,vfprintf  -lprintf_flt  -lm -Wl,-Map=tempfin1.map
 
 
 ## Intel Hex file production flags
@@ -36,8 +36,11 @@ HEX_EEPROM_FLAGS += --set-section-flags=.eeprom="alloc,load"
 HEX_EEPROM_FLAGS += --change-section-lma .eeprom=0 --no-change-warnings
 
 
+## Libraries
+LIBS = -lprintf_flt -lm 
+
 ## Objects that must be built in order to link
-OBJECTS = util.o kinen_core.o kinen_slave_328p.o print.o report.o tempfin1.o xio.o xio_usart.o xio_signals.o xio_spi.o system.o 
+OBJECTS = util.o kinen_core.o kinen_slave_328p.o report.o tempfin1.o xio.o xio_usart.o xio_signals.o xio_spi.o system.o 
 
 ## Objects explicitly added by the user
 LINKONLYOBJECTS = 
@@ -53,9 +56,6 @@ kinen_core.o: ../kinen_core.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 kinen_slave_328p.o: ../kinen_slave_328p.c
-	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
-
-print.o: ../print.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 report.o: ../report.c

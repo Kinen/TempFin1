@@ -28,7 +28,6 @@
 #include "system.h"
 #include "kinen_core.h"
 #include "tempfin1.h"
-//#include "serial.h"
 #include "print.h"
 #include "report.h"
 #include "util.h"
@@ -54,7 +53,6 @@ int main(void)
 	xio_init();					// do this second
 	kinen_init();				// do this third
 	device_init();				// handles all the low-level device peripheral inits
-//	serial_init(BAUD_RATE);
 	heater_init();				// setup the heater module and subordinate functions
 	sei(); 						// enable interrupts
 
@@ -104,7 +102,7 @@ void device_init(void)
 #define	DISPATCH(func) if (func == SC_EAGAIN) return; 
 static void _controller()
 {
-	DISPATCH(kinen_callback());		// intercept low-level communication events
+//	DISPATCH(kinen_callback());		// intercept low-level communication events
 	DISPATCH(tick_callback());		// regular interval timer clock handler (ticks)
 }
 
@@ -185,7 +183,7 @@ void heater_callback()
 	if (heater.temperature < ABSOLUTE_ZERO) {
 		if (++heater.bad_reading_count > heater.bad_reading_max) {
 			heater_off(HEATER_SHUTDOWN, HEATER_SENSOR_ERROR);
-			printPgmString(PSTR("Heater Sensor Error Shutdown\n"));	
+			printf_P(PSTR("Heater Sensor Error Shutdown\n"));	
 		}
 		return;
 	}
@@ -201,13 +199,13 @@ void heater_callback()
 		if ((heater.temperature < heater.ambient_temperature) &&
 			(heater.regulation_timer > heater.ambient_timeout)) {
 			heater_off(HEATER_SHUTDOWN, HEATER_AMBIENT_TIMED_OUT);
-			printPgmString(PSTR("Heater Ambient Error Shutdown\n"));	
+			printf_P(PSTR("Heater Ambient Error Shutdown\n"));	
 			return;
 		}
 		if ((heater.temperature < heater.setpoint) &&
 			(heater.regulation_timer > heater.regulation_timeout)) {
 			heater_off(HEATER_SHUTDOWN, HEATER_REGULATION_TIMED_OUT);
-			printPgmString(PSTR("Heater Timeout Error Shutdown\n"));	
+			printf_P(PSTR("Heater Timeout Error Shutdown\n"));	
 			return;
 		}
 	}
@@ -445,7 +443,8 @@ static inline double _sensor_sample(uint8_t adc_channel)
  */
 void adc_init(uint8_t channel)
 {
-	ADMUX  = (ADC_REFS | channel);	 // setup ADC Vref and channel
+	PRR &= ~PRADC_bm;					// Enable the ADC in the power reduction register (system.h)
+	ADMUX  = (ADC_REFS | channel);		// setup ADC Vref and channel
 	ADCSRA = (ADC_ENABLE | ADC_PRESCALE);// Enable ADC (bit 7) & set prescaler
 
 	ADMUX &= 0xF0;						// clobber the channel
@@ -473,13 +472,14 @@ uint16_t adc_read()
  */
 void pwm_init(void)
 {
-	TCCR2A  = PWM_INVERTED;		// alternative is PWM_NONINVERTED
-	TCCR2A |= 0b00000011;		// Waveform generation set to MODE 7 - here...
-	TCCR2B  = 0b00001000;		// ...continued here
-	TCCR2B |= PWM_PRESCALE_SET;	// set clock and prescaler
-	TIMSK1 = 0; 				// disable PWM interrupts
-	OCR2A = 0;					// clear PWM frequency (TOP value)
-	OCR2B = 0;					// clear PWM duty cycle as % of TOP value
+	PRR &= ~PRTIM2_bm;					// Enable Timer2 in the power reduction register (system.h)
+	TCCR2A  = PWM_INVERTED;				// alternative is PWM_NONINVERTED
+	TCCR2A |= 0b00000011;				// Waveform generation set to MODE 7 - here...
+	TCCR2B  = 0b00001000;				// ...continued here
+	TCCR2B |= PWM_PRESCALE_SET;			// set clock and prescaler
+	TIMSK1 = 0; 						// disable PWM interrupts
+	OCR2A = 0;							// clear PWM frequency (TOP value)
+	OCR2B = 0;							// clear PWM duty cycle as % of TOP value
 	device.pwm_freq = 0;
 }
 
@@ -551,6 +551,7 @@ uint8_t pwm_set_duty(double duty)
 
 void tick_init(void)
 {
+	PRR &= ~PRTIM0_bm;				// Enable Timer0 in the power reduction register (system.h)
 	TCCR0A = TICK_MODE;				// mode_settings
 	TCCR0B = TICK_PRESCALER;		// 1024 ~= 7800 Hz
 	OCR0A = TICK_COUNT;
@@ -629,41 +630,6 @@ void led_toggle(void)
 	} else {
 		led_off();
 	}
-}
-
-/****************************************************************************
- *
- * Kinen Callback functions - mandatory
- *
- *	These functions are called from Kinen drivers and must be implemented 
- *	at the device level for any Kinen device
- *
- *	device_reset() 		- reset device in response tro Kinen reset command
- *	device_read_byte() 	- read a byte from Kinen channel into device structs
- *	device_write_byte() - write a byte from device to Kinen channel
- */
-
-void device_reset(void)
-{
-	return;
-}
-
-uint8_t device_read_byte(uint8_t addr, uint8_t *data)
-{
-	addr -= KINEN_COMMON_MAX;
-	if (addr >= DEVICE_ADDRESS_MAX) return (SC_INVALID_ADDRESS);
-	*data = device.array[addr];
-	return (SC_OK);
-}
-
-uint8_t device_write_byte(uint8_t addr, uint8_t data)
-{
-	addr -= KINEN_COMMON_MAX;
-	if (addr >= DEVICE_ADDRESS_MAX) return (SC_INVALID_ADDRESS);
-	// There are no checks in here for read-only locations
-	// Assumes all locations are writable.
-	device.array[addr] = data;
-	return (SC_OK);
 }
 
 

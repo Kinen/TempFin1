@@ -10,9 +10,17 @@ print.c
 
 report.c
 
-serial.c
+system.c
 
 tempfin1.c
 
 util.c
+
+xio\xio.c
+
+xio\xio_signals.c
+
+xio\xio_spi.c
+
+xio\xio_usart.c
 

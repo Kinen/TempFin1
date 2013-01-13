@@ -101,6 +101,11 @@ void xio_init()
 	// open individual devices (file device opens occur at time-of-use)
 	xio_open(XIO_DEV_USART, 0,USART_FLAGS);
 	xio_open(XIO_DEV_SPI, 0, SPI_FLAGS);
+
+	// setup std devices for printf/fprintf to work
+	xio_set_stdin(XIO_DEV_USART);
+	xio_set_stdout(XIO_DEV_USART);
+	xio_set_stderr(XIO_DEV_SPI);
 }
 
 /*
