@@ -2,7 +2,7 @@
  * report.c - contains all reporting statements
  * Part of Kinen project
  *
- * Copyright (c) 2012 Alden S. Hart Jr.
+ * Copyright (c) 2012 - 2013 Alden S. Hart Jr.
  *
  * The Kinen Motion Control System is licensed under the LGPL license
  *
@@ -16,18 +16,14 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
+//#include <stdlib.h>
+//#include <stdbool.h>
+//#include <string.h>
 #include <avr/pgmspace.h>
 
-//#include "print.h"
 #include "report.h"
 #include "tempfin1.h"
 #include "xio/xio.h"
-
-#define MSGLEN 24
-char msg[MSGLEN];
 
 /*** Strings and string arrays in program memory ***/
 
@@ -50,42 +46,23 @@ static PGM_P const msg_hstate[] PROGMEM = { msg_hstate0, msg_hstate1, msg_hstate
 
 void rpt_initialized()
 {
-//	printPgmString((PGM_P)(pgm_read_word(initialized))); 
-//	printPgmString(PSTR("\nDevice Initialized\n")); 
 	printf_P(PSTR("\nDevice Initialized\n"));
 }
 
 void rpt_readout()
 {
-	printf_P(PSTR("Temp:%1.3f  PWM:%1.3f  "), sensor.temperature, pid.output);
-//	printf_P(PSTR("s[0]:%1.3f  "),sensor.sample[0]);
-	printf_P(PSTR("StdDev:%1.3f  "),sensor.std_dev);
-//	printf_P(PSTR("Samples:%1.3f  "),sensor.samples);
-	printf_P(PSTR("Err:%1.3f  "),pid.error);
-	printf_P(PSTR("I:%1.3f  "),pid.integral);
-//	printf_P(PSTR("D:%1.3f  "),pid.derivative);
-//	printf_P(PSTR("Hy:%1.3f  "),heater.hysteresis);
+	printf_P(PSTR("Temp:%1.3f  "), 		sensor.temperature);
+	printf_P(PSTR("PWM:%1.3f  "),		pid.output);
+//	printf_P(PSTR("s[0]:%1.3f  "), 		sensor.sample[0]);
+	printf_P(PSTR("StdDev:%1.3f  "),	sensor.std_dev);
+//	printf_P(PSTR("Samples:%1.3f  "),	sensor.samples);
+	printf_P(PSTR("Err:%1.3f  "),		pid.error);
+	printf_P(PSTR("I:%1.3f  "),			pid.integral);
+//	printf_P(PSTR("D:%1.3f  "),			pid.derivative);
+//	printf_P(PSTR("Hy:%1.3f  "),		heater.hysteresis);
 
 	printf_P((PGM_P)pgm_read_word(&msg_hstate[heater.state]));
 //	printf_P((PGM_P)pgm_read_word(&msg_scode[sensor.code]));
-
 	printf_P(PSTR("\n")); 
-
-/*
-	printPgmString(PSTR("Temp:")); printFloat(sensor.temperature);
-	printPgmString(PSTR("  PWM:")); printFloat(pid.output);
-//	printPgmString(PSTR("  s[0]:")); printFloat(sensor.sample[0]);
-	printPgmString(PSTR("  StdDev:")); printFloat(sensor.std_dev);
-//	printPgmString(PSTR("  Samples:")); printFloat(sensor.samples);
-	printPgmString(PSTR("  Err:")); printFloat(pid.error);
-	printPgmString(PSTR("  I:")); printFloat(pid.integral);
-//	printPgmString(PSTR("  D:")); printFloat(pid.derivative);
-//	printPgmString(PSTR("  Hy:")); printFloat(heater.hysteresis);
-
-	printPgmString((PGM_P)pgm_read_word(&msg_hstate[heater.state]));
-//	printPgmString((PGM_P)pgm_read_word(&msg_scode[sensor.code]));
-
-	printPgmString(PSTR("\n")); 
-*/
 }
 

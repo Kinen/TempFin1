@@ -41,7 +41,43 @@
  *	#include "xio_signals.h"
  *	(possibly more)
  */
-
+/* --- Notes on Circular Buffers ---
+ *
+ * 	The circular buffers used by low-level character IO functions are an attempt 
+ *	to optimize for execution speed. The circular buffers are unsigned char arrays 
+ *	that fill down from the top element and wrap back to the top when index zero 
+ *	is reached. This allows the assembly code to use pre-decrement operations, Z bit 
+ *	tests, and eliminates modulus, masks, subtractions and other less efficient bounds 
+ *	checking. 
+ *
+ *	Buffer indexes are uint_fast8_t which limits these buffers to 254 usable locations. 
+ *	(one location is lost to head/tail collision detection and one is lost to the zero 
+ *	position) All this enables the compiler to do better optimization. 
+ *
+ *	It is possible to use buffers > 254 bytes by setting BUFFER_T to uint16_t. 
+ *	This supports buffers with a 16 bit index at some penalty to performance.
+ * 
+ *	Chars are written to the *head* and read from the *tail*.
+ *
+ *	The head is left "pointing to" the character that was previously written - 
+ *	meaning that on write the head is pre-decremented (and wrapped, if necessary), 
+ *	then the new character is written.
+ *
+ *	The tail is left "pointing to" the character that was previouly read - 
+ *	meaning that on read the tail is pre-decremented (and wrapped, if necessary), 
+ *	then the new character is read.
+ *
+ *	The head is only allowed to equal the tail if there are no characters to read.
+ *
+ *	On read: If the head == the tail there is nothing to read, so the function 
+ *	either exits with TG_EAGAIN or blocks (depending on the blocking mode selected).
+ *
+ *	On write: If the head pre-decrement causes the head to equal the tail the buffer
+ *	is full. The head is left at its original value and the device should go into 
+ *	flow control (and the byte in the USART device is not read, and therefore remains
+ *	in the USART (VERIFY THAT I DIDN'T BREAK THIS BEHAVIOR!)). Reading a character
+ *	from a buffer that is in flow control should clear flow control.
+ */
 #ifndef xio_h
 #define xio_h
 

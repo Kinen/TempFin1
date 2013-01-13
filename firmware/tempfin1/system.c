@@ -25,5 +25,17 @@
 
 void sys_init() 
 {
-//	PRR = 0xFF;	// turn off all peripherals. Each device needs to enble itself
+	PRR = 0xFF;					// turn off all peripherals. Each device needs to enble itself
+
+	DDRB = 0x00;				// initialize all ports as inputs. Each device sets its own outputs
+	DDRC = 0x00;
+	DDRD = 0x00;
 }
+
+// Atmega328P data direction defines: 0=input pin, 1=output pin
+// These defines therefore only specify output pins
+/*
+#define PORTB_DIR	(SPI_MISO)			// setup for on-board SPI to work
+#define PORTC_DIR	(0)					// no output bits on C
+#define PORTD_DIR	(LED_PIN | PWM_OUTB)// set LED and PWM bits as outputs
+*/

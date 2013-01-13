@@ -28,7 +28,6 @@
 #include "system.h"
 #include "kinen_core.h"
 #include "tempfin1.h"
-#include "print.h"
 #include "report.h"
 #include "util.h"
 #include "xio/xio.h"
@@ -48,38 +47,33 @@ static double _sensor_sample(uint8_t adc_channel);
  */
 int main(void)
 {
-	cli();						// initializations
+	cli();
+
+	// system-level inits
 	sys_init();					// do this first
 	xio_init();					// do this second
 	kinen_init();				// do this third
-	device_init();				// handles all the low-level device peripheral inits
-	heater_init();				// setup the heater module and subordinate functions
-	sei(); 						// enable interrupts
 
-	UNIT_TESTS;					// uncomment __UNIT_TEST_TC to enable unit tests
-
-	heater_on(160);				// turn heater on for testing
-	rpt_initialized();			// send initalization string
-
-	while (true) {				// go to the controller loop and never return
-		_controller();
-	}
-	return (false);				// never returns
-}
-
-/*
- * Device Init 
- */
-void device_init(void)
-{
-	DDRB = PORTB_DIR;			// initialize all ports for proper IO function
-	DDRC = PORTC_DIR;
-	DDRD = PORTD_DIR;
-
+	// device level inits
 	adc_init(ADC_CHANNEL);
 	pwm_init();
 	tick_init();
-	led_off();					// put off the red light [~Sting, 1978]
+	led_init();
+
+	// application level inits
+	heater_init();				// setup the heater module and subordinate functions
+	sei(); 						// enable interrupts
+	rpt_initialized();			// send initalization string
+
+	// test code
+	UNIT_TESTS;					// uncomment __UNIT_TEST_TC to enable unit tests
+	heater_on(160);				 // turn heater on for testing
+
+	// main loop
+	while (true) {
+		_controller();
+	}
+	return (false);				// never returns
 }
 
 /**** PWM Port Functions ****
@@ -304,6 +298,7 @@ void sensor_init()
 	sensor.reading_variance_max = SENSOR_READING_VARIANCE_MAX;
 	sensor.disconnect_temperature = SENSOR_DISCONNECTED_TEMPERATURE;
 	sensor.no_power_temperature = SENSOR_NO_POWER_TEMPERATURE;
+	// note: there are no bits to set to outputs in this initialization
 }
 
 void sensor_on()
@@ -472,6 +467,7 @@ uint16_t adc_read()
  */
 void pwm_init(void)
 {
+	DDRD |= PWM_OUTB;					// set PWM bit to output
 	PRR &= ~PRTIM2_bm;					// Enable Timer2 in the power reduction register (system.h)
 	TCCR2A  = PWM_INVERTED;				// alternative is PWM_NONINVERTED
 	TCCR2A |= 0b00000011;				// Waveform generation set to MODE 7 - here...
@@ -608,10 +604,17 @@ void tick_1sec(void)			// 1 second callout
 }
 
 /**** LED Functions ****
+ * led_init()
  * led_on()
  * led_off()
  * led_toggle()
  */
+
+void led_init()
+{
+	DDRD |= PWM_OUTB;			// set PWM bit to output
+	led_off();					// put off the red light [~Sting, 1978]
+}
 
 void led_on(void) 
 {

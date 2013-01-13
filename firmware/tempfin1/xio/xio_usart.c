@@ -152,7 +152,7 @@ void xio_set_baud_usart(xioUsart *dx, const uint32_t baud)
  */
 int xio_gets_usart(xioDev *d, char *buf, const int size)
 {
-	xioUsart *dx = d->x;						// USART pointer
+	xioUsart *dx =(xioUsart *)d->x;				// USART pointer
 
 	if (d->flag_in_line == false) {				// first time thru initializations
 		d->flag_in_line = true;					// yes, we are busy getting a line
@@ -235,7 +235,7 @@ static int _gets_helper(xioDev *d, xioUsart *dx)
 int xio_getc_usart(FILE *stream)
 {
 	xioDev *d = (xioDev *)stream->udata;			// get device struct pointer
-	xioUsart *dx = d->x;							// get USART pointer
+	xioUsart *dx =(xioUsart *)d->x;					// USART pointer
 	char c;
 
 	while (dx->rx_buf_head == dx->rx_buf_tail) {	// RX ISR buffer empty
@@ -323,7 +323,7 @@ void xio_queue_RX_string_usart(const uint8_t dev, const char *buf)
 void xio_queue_RX_char_usart(const uint8_t dev, const char c)
 {
 	xioDev *d = &ds[dev];						// init device struct pointer
-	xioUsart *dx = d->x;
+	xioUsart *dx =(xioUsart *)d->x;				// USART pointer
 
 	if ((--dx->rx_buf_head) == 0) { 			// wrap condition
 		dx->rx_buf_head = RX_BUFFER_SIZE-1;		// -1 avoids the off-by-one err

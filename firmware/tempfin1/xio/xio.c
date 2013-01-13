@@ -129,7 +129,7 @@ void xio_open_generic(uint8_t dev, x_open x_open, x_ctrl x_ctrl, x_gets x_gets, 
 	d->x_gets = x_gets;
 	d->x_getc = x_getc;		// you don't need to bind these unless you are going to use them directly
 	d->x_putc = x_putc;		// they are bound into the fdev stream struct
-//	d->fc_func = fc_func;	// flow control function or null FC function
+	d->fc_func = fc_func;	// flow control function or null FC function
 
 	// setup the stdio FILE struct and link udata back to the device struct
 	fdev_setup_stream(&d->file, x_putc, x_getc, _FDEV_SETUP_RW);

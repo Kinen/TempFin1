@@ -26,11 +26,8 @@ void sys_init(void);					// master hardware init
 //#define __CLOCK_EXTERNAL_8MHZ	TRUE	// uses PLL to provide 32 MHz system clock
 #define __CLOCK_EXTERNAL_16MHZ TRUE		// uses PLL to provide 32 MHz system clock
 
-
-/*** Power reduction register settings ***/
-// Set everything to off, then have each device init enable it
-
-// this is the part you may need to change
+/*** Power reduction register mappings ***/
+// you shouldn't need to change this
 #define PRADC_bm 	(1<<PRADC)
 #define PRUSART0_bm	(1<<PRUSART0)
 #define PRSPI_bm 	(1<<PRSPI)
@@ -38,7 +35,5 @@ void sys_init(void);					// master hardware init
 #define PRTIM0_bm	(1<<PRTIM0)
 #define PRTIM2_bm	(1<<PRTIM2)
 #define PRTWI_bm	(1<<PRTWI)
-
-// this is the part you shouldn't need to change
 
 #endif

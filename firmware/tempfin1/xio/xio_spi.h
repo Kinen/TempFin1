@@ -26,50 +26,7 @@
 #define SPI_RX_BUFFER_SIZE (SPIBUF_T)64		// BUFFER_T can be 8 bits
 #define SPI_TX_BUFFER_SIZE (SPIBUF_T)64		// BUFFER_T can be 8 bits
 
-// Alternates for larger buffers - mostly for debugging
-//#define SPIBUF_T uint16_t					// slower, but supports larger buffers
-//#define SPI_RX_BUFFER_SIZE (SPIBUF_T)512	// BUFFER_T must be 16 bits if >255
-//#define SPI_TX_BUFFER_SIZE (SPIBUF_T)512	// BUFFER_T must be 16 bits if >255
-//#define SPI_RX_BUFFER_SIZE (SPIBUF_T)1024	// 2048 is the practical upper limit
-//#define SPI_TX_BUFFER_SIZE (SPIBUF_T)1024	// 2048 is practical upper limit given RAM
-
-
-//**** SPI device configuration ****
-//NOTE: XIO_BLOCK / XIO_NOBLOCK affects reads only. Writes always block. (see xio.h)
-
 #define SPI_FLAGS (XIO_BLOCK |  XIO_ECHO | XIO_LINEMODE)
-
-#define BIT_BANG 		0					// use this value if no USART is being used
-#define SPI_USART 		BIT_BANG			// USB usart or BIT_BANG value
-#define SPI_RX_ISR_vect	BIT_BANG		 	// (RX) reception complete IRQ
-#define SPI_TX_ISR_vect	BIT_BANG			// (TX) data register empty IRQ
-
-//#define SPI_USART USARTC1					// USB usart
-//#define SPI_RX_ISR_vect USARTC0_RXC_vect 	// (RX) reception complete IRQ
-//#define SPI_TX_ISR_vect USARTC0_DRE_vect	// (TX) data register empty IRQ
-
-// The bit mappings for SCK / MISO / MOSI / SS1 map to the xmega SPI device pinouts
-#define SPI_DATA_PORT PORTC					// port for SPI data lines
-#define SPI_SCK_bp  	7					// SCK - clock bit position (pin is wired on board)
-#define SPI_MISO_bp 	6					// MISO - bit position (pin is wired on board)
-#define SPI_MOSI_bp 	5					// MOSI - bit position (pin is wired on board)
-#define SPI_SS1_PORT	SPI_DATA_PORT		// slave select assignments
-#define SPI_SS1_bp  	4					// SS1 - slave select #1
-// additional slave selects
-#define SPI_SS2_PORT	PORTB
-#define SPI_SS2_bp  	3					// SS1 - slave select #2
-
-#define SPI_MOSI_bm 	(1<<SPI_MOSI_bp)	// bit masks for the above
-#define SPI_MISO_bm 	(1<<SPI_MISO_bp)
-#define SPI_SCK_bm 		(1<<SPI_SCK_bp)
-#define SPI_SS1_bm 		(1<<SPI_SS1_bp)
-#define SPI_SS2_bm 		(1<<SPI_SS2_bp)
-
-#define SPI_INBITS_bm 	(SPI_MISO_bm)
-#define SPI_OUTBITS_bm 	(SPI_MOSI_bm | SPI_SCK_bm | SPI_SS1_bm | SPI_SS2_bm)
-#define SPI_OUTCLR_bm 	(0)					// outputs init'd to 0
-#define SPI_OUTSET_bm 	(SPI_OUTBITS_bm)		// outputs init'd to 1
-
 
 /******************************************************************************
  * STRUCTURES 
