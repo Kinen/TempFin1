@@ -25,12 +25,14 @@
 #include <avr/pgmspace.h>
 #include <math.h>
 
+#include "system.h"
 #include "kinen_core.h"
 #include "tempfin1.h"
-#include "serial.h"
+//#include "serial.h"
 #include "print.h"
 #include "report.h"
 #include "util.h"
+#include "xio/xio.h"
 
 // local functions
 
@@ -48,9 +50,11 @@ static double _sensor_sample(uint8_t adc_channel);
 int main(void)
 {
 	cli();						// initializations
-	kinen_init();				// do this first
+	sys_init();					// do this first
+	xio_init();					// do this second
+	kinen_init();				// do this third
 	device_init();				// handles all the low-level device peripheral inits
-	serial_init(BAUD_RATE);
+//	serial_init(BAUD_RATE);
 	heater_init();				// setup the heater module and subordinate functions
 	sei(); 						// enable interrupts
 

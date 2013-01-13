@@ -15,7 +15,7 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -gdwarf-2 -std=gnu99 -DF_CPU=16000000UL -Os -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
+CFLAGS += -Wall -gdwarf-2 -std=gnu99   -DF_CPU=16000000UL -O0 -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d 
 
 ## Assembly specific flags
@@ -37,7 +37,7 @@ HEX_EEPROM_FLAGS += --change-section-lma .eeprom=0 --no-change-warnings
 
 
 ## Objects that must be built in order to link
-OBJECTS = util.o kinen_core.o kinen_slave_328p.o print.o report.o serial.o tempfin1.o 
+OBJECTS = util.o kinen_core.o kinen_slave_328p.o print.o report.o tempfin1.o xio.o xio_usart.o xio_signals.o xio_spi.o system.o 
 
 ## Objects explicitly added by the user
 LINKONLYOBJECTS = 
@@ -61,10 +61,22 @@ print.o: ../print.c
 report.o: ../report.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
-serial.o: ../serial.c
+tempfin1.o: ../tempfin1.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
-tempfin1.o: ../tempfin1.c
+xio.o: ../xio/xio.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+xio_usart.o: ../xio/xio_usart.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+xio_signals.o: ../xio/xio_signals.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+xio_spi.o: ../xio/xio_spi.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+system.o: ../system.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 ##Link

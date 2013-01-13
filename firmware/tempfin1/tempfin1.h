@@ -17,7 +17,7 @@
 #ifndef tempfin1_h
 #define tempfin1_h
 
-#define BUILD_NUMBER 001.08		// for keeping track of git revisions
+#define BUILD_NUMBER 001.09		// for keeping track of git revisions
 
 // Device function prototypes
 

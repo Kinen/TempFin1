@@ -1,8 +1,8 @@
 /*
- * json_parser.c - JSON parser for rs274/ngc parser.
+ * xio_signals.c  - tinyg signal handling
  * Part of TinyG project
  *
- * Copyright (c) 2012 Alden S. Hart, Jr.
+ * Copyright (c) 2010 2013 - Alden S. Hart Jr.
  *
  * TinyG is free software: you can redistribute it and/or modify it 
  * under the terms of the GNU General Public License as published by 
@@ -24,27 +24,44 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *-----
+ *
+ *	This file is isolated from the other xio files as it can have a lot 
+ *	of application specific code.
+ *
  */
 
-#ifndef json_parser_h
-#define json_parser_h
+#include <stdio.h>						// precursor for xio.h
+#include <stdbool.h>					// true and false
+#include <avr/pgmspace.h>				// precursor for xio.h
+//#include "../tinyg.h"
+#include "xio.h"
 
 /*
- * Global Scope Functions
+ * sig_init()		 - init signals
+ * sig_reset()		 - end program (hard)
+ * sig_feedhold()	 - stop motion
+ * sig_cycle_start() - start or resume motion
  */
 
-void js_init(void);						// Initialize the parser
-uint8_t js_json_parser(char *str);
-uint16_t js_serialize_json(char *out_buf);
+void sig_init()
+{
+	sig.sig_reset = false;
+	sig.sig_feedhold = false;
+	sig.sig_cycle_start = false;
+}
 
-/* unit test setup */
+inline void sig_reset()					// reset
+{
+	sig.sig_reset = true;
+}
 
-//#define __UNIT_TEST_JSON				// uncomment to enable JSON unit tests
-#ifdef __UNIT_TEST_JSON
-void js_unit_tests(void);
-#define	JSON_UNITS js_unit_tests();
-#else
-#define	JSON_UNITS
-#endif // __UNIT_TEST_JSON
+inline void sig_feedhold()				// pause
+{
+	sig.sig_feedhold = true;
+}
 
-#endif
+inline void sig_cycle_start()			// start or resume
+{
+	sig.sig_cycle_start = true;
+}

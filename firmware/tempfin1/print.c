@@ -22,10 +22,15 @@
 /* This code was initially inspired by the wiring_serial module by David A. Mellis which
    used to be a part of the Arduino project. */ 
 
-#include <avr/pgmspace.h>
+#include <stdio.h>						// precursor for xio.h
+//#include <stdbool.h>					// true and false
+//#include <string.h>						// for memset
+#include <avr/pgmspace.h>				// precursor for xio.h.
+//#include <avr/interrupt.h>
 
 #include "print.h"
-#include "serial.h"
+#include "xio/xio.h"
+//#include "serial.h"
 
 void printString(const char *s)
 {

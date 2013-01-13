@@ -41,23 +41,18 @@
 #include "config.h"					// JSON sits on top of the config system
 #include "controller.h"
 #include "json_parser.h"
+#include "canonical_machine.h"
 #include "report.h"
 #include "util.h"
 #include "xio/xio.h"				// for char definitions
 
 // local scope stuff
 
+uint8_t _json_parser_kernal(char *str);
 static uint8_t _get_nv_pair(cmdObj *cmd, char **pstr, const char *group, int8_t *depth);
 static uint8_t _normalize_json_string(char *str, uint16_t size);
+static uint8_t _gcode_comment_overrun_hack(cmdObj *cmd);
 
-/****************************************************************************
- * js_init() 
- */
-
-void js_init() 
-{
-	return;
-}
 
 /****************************************************************************
  * js_json_parser() - parse a JSON string
@@ -88,17 +83,14 @@ void js_init()
  *	  - returns the status and the JSON response string
  */
 
-uint8_t _json_parser(char *str);
-
-uint8_t js_json_parser(char *str)
+void js_json_parser(char *str)
 {
 	uint8_t status;
-	status = _json_parser(str);
+	status = _json_parser_kernal(str);
 	cmd_print_list(status, TEXT_INLINE_PAIRS);
-	return(status);
 }
 
-uint8_t _json_parser(char *str)
+uint8_t _json_parser_kernal(char *str)
 {
 	uint8_t status;
 	int8_t depth = 2;							// starting body depth is 2
@@ -108,6 +100,7 @@ uint8_t _json_parser(char *str)
 
 	// parse the JSON command into the cmd body
 	ritorno(_normalize_json_string(str, JSON_OUTPUT_STRING_MAX));	// return if error
+
 	do {
 		if (--i == 0) { return (TG_JSON_TOO_MANY_PAIRS); }			// length error
 		if ((status = _get_nv_pair(cmd, &str, group, &depth)) > TG_EAGAIN) { // erred out
@@ -117,7 +110,7 @@ uint8_t _json_parser(char *str)
 		cmd = cmd->nx;
 	} while (status != TG_OK);					// breaks when parsing is complete
 
-	// execute the command - iterate through all commands in the body
+	// execute the command
 	cmd = cmd_body;
 	if (cmd->type == TYPE_NULL){				// means GET the value
 		ritorno(cmd_get(cmd));					// ritorno returns w/status on any errors
@@ -182,69 +175,83 @@ static uint8_t _get_nv_pair(cmdObj *cmd, char **pstr, const char *group, int8_t 
 	char *tmp;
 	char terminators[] = {"},"};
 
-	cmd_clear(cmd);								// wipe the object and set the depth
+	cmd_new_obj(cmd);								// wipe the object and set the depth
 
-	// process name element
-	// find leading and trailing name quotes and set pointers accordingly
-	// accommodate groups by looking up index by full name but stripping group from token
+	// --- Process name part ---
+	// find leading and trailing name quotes and set pointers.
 	if ((*pstr = strchr(*pstr, '\"')) == NULL) return (TG_JSON_SYNTAX_ERROR);
 	if ((tmp = strchr(++(*pstr), '\"')) == NULL) return (TG_JSON_SYNTAX_ERROR);
 	*tmp = NUL;
 
-	// copy the token by itself or with a group prefix if it's a prefixed group
-	if (strstr(GROUP_PREFIXES, group) == NULL) {
-		strncpy(cmd->friendly_name, *pstr, CMD_STRING_LEN);	// copy name from string
-	} else {
-		strncpy(cmd->friendly_name, group, CMD_GROUP_LEN);// prepend the group
-		strncpy(&cmd->friendly_name[strlen(group)], *pstr, CMD_STRING_LEN);// cat name to group prefix
+	// process the token and group strings
+	strncpy(cmd->token, *pstr, CMD_TOKEN_LEN);		// copy the string to the token
+	if (group[0] != NUL) {							// if NV pair is part of a group
+		strncpy(cmd->group, group, CMD_GROUP_LEN);	// copy the parent's group to this child
 	}
 
-	// get the index or return if the token / friendly_name is invalid
-	if ((cmd->index = cmd_get_index(cmd->friendly_name)) == -1) { return (TG_UNRECOGNIZED_COMMAND);}
-	cmd_get_token(cmd->index, cmd->token);
-	if (group[0] != NUL) {						// strip group prefix if this is a group
-		strncpy(cmd->token, &cmd->friendly_name[strlen(group)], CMD_TOKEN_LEN);
-		strncpy(cmd->group, group, CMD_GROUP_LEN);// propagate group token to this child
+	// validate the token and get the index
+	if ((cmd->index = cmd_get_index(cmd->group, cmd->token)) == NO_INDEX) { 
+		return (TG_UNRECOGNIZED_COMMAND);
 	}
 	*pstr = ++tmp;
 
-	// process value element
+	// --- Process value part ---  (organized from most to least encountered)
 	if ((*pstr = strchr(*pstr, ':')) == NULL) return (TG_JSON_SYNTAX_ERROR);
 	(*pstr)++;									// advance to start of value field
-	if ((**pstr == 'n') || ((**pstr == '\"') && (*(*pstr+1) == '\"'))) { 
+
+	// nulls (gets)
+	if ((**pstr == 'n') || ((**pstr == '\"') && (*(*pstr+1) == '\"'))) { // process null value
 		cmd->type = TYPE_NULL;
 		cmd->value = TYPE_NULL;
-		if (cmd_is_group(cmd->token) == true) { 
-			strncpy(cmd->group, cmd->token, CMD_GROUP_LEN);// record the group token
-		}
-	} else if (**pstr == 'f') { 
-		cmd->type = TYPE_FALSE;
-		cmd->value = false;						// (technically not necessary due to the init)
-	} else if (**pstr == 't') { 
-		cmd->type = TYPE_TRUE;
-		cmd->value = true;
+	
+	// numbers
 	} else if (isdigit(**pstr) || (**pstr == '-')) { // value is a number
 		cmd->value = strtod(*pstr, &tmp);		// tmp is the end pointer
 		if(tmp == *pstr) return (TG_BAD_NUMBER_FORMAT);
 		cmd->type = TYPE_FLOAT;
-	} else if (**pstr == '\"') { 				// value is a string
-		(*pstr)++;
-		if ((tmp = strchr(*pstr, '\"')) == NULL) return (TG_JSON_SYNTAX_ERROR); // find the end of the string
-		*tmp = NUL;
-		if (strlen(*pstr) >= CMD_STRING_LEN) return (TG_INPUT_EXCEEDS_MAX_LENGTH);
-		strncpy(cmd->string, *pstr, CMD_STRING_LEN);
-		cmd->type = TYPE_STRING;
-		*pstr = ++tmp;
+
+	// parents
 	} else if (**pstr == '{') { cmd->type = TYPE_PARENT;
 		strncpy(cmd->group, cmd->token, CMD_GROUP_LEN);// record the group token
 //		*depth += 1;							// will set the next object down one level
 		(*pstr)++;
 		return(TG_EAGAIN);						// signal that there is more to parse
+
+	// strings
+	} else if (**pstr == '\"') { 				// value is a string
+		(*pstr)++;
+		cmd->type = TYPE_STRING;
+		if ((tmp = strchr(*pstr, '\"')) == NULL) return (TG_JSON_SYNTAX_ERROR); // find the end of the string
+		*tmp = NUL;
+		strncpy(cmd->string, *pstr, CMD_STRING_LEN);// copy it regardless of length
+		if (strlen(*pstr) >= CMD_STRING_LEN) {
+			*((*pstr) + CMD_STRING_LEN) = NUL;		// terminate for error display purposes
+			if (_gcode_comment_overrun_hack(cmd) == false) {
+				return (TG_INPUT_EXCEEDS_MAX_LENGTH);
+			}
+		}
+		*pstr = ++tmp;
+
+	// boolean true/false
+	} else if (**pstr == 't') { 
+		cmd->type = TYPE_BOOL;
+		cmd->value = true;
+	} else if (**pstr == 'f') { 
+		cmd->type = TYPE_BOOL;
+		cmd->value = false;
+
+	// arrays (the parser doesn't do input arrays yet)
+	} else if (**pstr == '[') {
+		cmd->type = TYPE_ARRAY;
+		strncpy(cmd->string, *pstr, CMD_STRING_LEN);// copy array into string for error displays
+		return (TG_INPUT_VALUE_UNSUPPORTED);
+
+	// general error condition
 	} else {
 		 return (TG_JSON_SYNTAX_ERROR);			// ill-formed JSON
 	}
 
-	// process pair transitions and end conditions
+	// process comma separators and end curlies
 	if ((*pstr = strpbrk(*pstr, terminators)) == NULL) { // advance to terminator or err out
 		return (TG_JSON_SYNTAX_ERROR);
 	}
@@ -259,6 +266,23 @@ static uint8_t _get_nv_pair(cmdObj *cmd, char **pstr, const char *group, int8_t 
 	return (TG_OK);								// signal that parsing is complete
 }
 
+/*
+ * _gcode_comment_overrun_hack() - gcode overrun exception
+ *
+ *	Make an exception for string buffer overrun if the string is Gcode and the
+ *	overrun is cuased by as comment. The comment will be truncated. If the 
+ *	comment happens to be a message, well tough noogies, bucko.
+ */
+
+static uint8_t _gcode_comment_overrun_hack(cmdObj *cmd)
+{
+	if (strstr(cmd->string,"(") == NULL) {
+		return (false);
+	}
+	return (true);
+}
+
+
 /****************************************************************************
  * js_serialize_json() - make a JSON object string from JSON object array
  *
@@ -267,14 +291,18 @@ static uint8_t _get_nv_pair(cmdObj *cmd, char **pstr, const char *group, int8_t 
  *	Returns the character count of the resulting string
  */
 
-uint16_t js_serialize_json(char *out_buf)
+uint16_t js_serialize_json(cmdObj *cmd, char *out_buf)
 {
-	cmdObj *cmd = cmd_header;
 	char *str = out_buf;						// set working string pointer 
 	int8_t depth = 0;
 
 	strcpy(str++, "{"); 						// write opening curly
-	do {	// serialize the current element (assumes the first element is not empty)
+	while (cmd->nx != NULL) {					// null signals last object
+		if (cmd->type == TYPE_EMPTY) { 			// skip over empty elements
+			cmd = cmd->nx;
+			continue;
+		}
+ 		// serialize the current element (assumes the first element is not empty)
 		str += sprintf(str, "\"%s\":", cmd->token);
 
 		if (cmd->type == TYPE_PARENT) {
@@ -282,19 +310,23 @@ uint16_t js_serialize_json(char *out_buf)
 			cmd = cmd->nx;
 			depth = cmd->depth;
 			continue;
-		} else if (cmd->type == TYPE_END)	 { str += sprintf(str, "\"\"");
-		} else if (cmd->type == TYPE_NULL)	 { str += sprintf(str, "\"\"");
-		} else if (cmd->type == TYPE_FALSE)	 { str += sprintf(str, "false");
-		} else if (cmd->type == TYPE_TRUE)	 { str += sprintf(str, "true");
-		} else if (cmd->type == TYPE_INTEGER){ str += sprintf(str, "%1.0f", cmd->value);
 		} else if (cmd->type == TYPE_FLOAT)	 { str += sprintf(str, "%0.3f", (double)cmd->value);
 		} else if (cmd->type == TYPE_STRING) { str += sprintf(str, "\"%s\"", cmd->string);
+		} else if (cmd->type == TYPE_INTEGER){ str += sprintf(str, "%1.0f", cmd->value);
 		} else if (cmd->type == TYPE_ARRAY)  { str += sprintf(str, "[%s]", cmd->string);
-		} 
-		do {  // advance to the next non-empty element
+		} else if (cmd->type == TYPE_EMPTY)	 { str += sprintf(str, "\"\"");
+		} else if (cmd->type == TYPE_NULL)	 { str += sprintf(str, "\"\"");
+		} else if (cmd->type == TYPE_BOOL)	 { 
+			if (cmd->value == false) {
+				str += sprintf(str, "false");
+			} else {
+				str += sprintf(str, "true");
+			}
+		}
+		do {  								// advance to the next non-empty element
 			cmd = cmd->nx;
 			if (cmd->nx == NULL) break;
-		} while (cmd->type == TYPE_END); 	// skip over empty elements
+		} while (cmd->type == TYPE_EMPTY); 	// skip over empty elements
 
 		while (depth > cmd->depth) {		// write commas or embedded closing curlies
 			str += sprintf(str, "}");
@@ -303,8 +335,7 @@ uint16_t js_serialize_json(char *out_buf)
 		if (cmd->nx != NULL) {
 			str += sprintf(str, ",");
 		}
-	} while (cmd->nx != NULL);
-
+	}
 	do { // handle closing curlies and NEWLINE
 		str += sprintf(str, "}");
 	} while (depth-- > 0);
@@ -312,10 +343,75 @@ uint16_t js_serialize_json(char *out_buf)
 	return (str - out_buf);
 }
 
+/****************************************************************************
+ * js_print_list() - output cmdObj list in JSON format
+ * 
+ *	The $je setting affects the level of response. Asynchronous reports such 
+ *	as status reports and QRs always respond with entire JSON line.
+ *
+ *	A footer is returned for every setting except $je=0
+ *
+ *	JE_SILENT = 0,			// No response is provided for any command
+ *	JE_OMIT_BODY,			// Gcode and config responses have footer only
+ *	JE_OMIT_GCODE_BODY,		// Body returned for configs; omitted for Gcode commands
+ *	JE_GCODE_LINENUM_ONLY,	// Body returned for configs; Gcode returns line number as 'n', otherwise body is omitted
+ *	JE_FULL_ECHO			// Body returned for configs and Gcode - Gcode comments removed
+ */
+void js_print_list(uint8_t status)
+{
+	if (cm.machine_state == MACHINE_INITIALIZING) {		// always do full echo during startup
+		fprintf(stderr,"\n");
+		cfg.json_verbosity = JV_VERBOSE;
+	}
+	if (cfg.json_verbosity == JV_SILENT) { return;}
+
+	cmdObj *cmd = cmd_header;							// the header is default starting point
+	uint8_t cmd_type = cmd_get_type(cmd_body);
+
+	if (cfg.json_verbosity == JV_FOOTER_ONLY) { 
+		if (cmd_type != CMD_TYPE_REPORT) {
+			cmd = cmd_footer;
+		}
+
+	// Special processing for Gcode responses
+	// Assumes the objects are ordered in the body as "gc", "msg", "n".
+	// "msg" and "n" may or may not be present in the body depending on conditions
+	} else if ((cmd_type == CMD_TYPE_GCODE) && (cfg.json_verbosity < JV_VERBOSE)) {	// < makes it more resilient
+		if (cfg.json_verbosity == JV_OMIT_GCODE_BODY) { 
+			cmd = cmd_footer;
+		} else {
+			cmdObj *tmp = cmd_body;
+			tmp->type = TYPE_EMPTY;								// omit the body from the display
+			if (cfg.json_verbosity == JV_GCODE_LINENUM_ONLY) { 	// returns line number but no message
+				tmp = tmp->nx;
+				if (tmp->token[0] == 'm') {
+					tmp->type = TYPE_EMPTY;						// omit the message from the display
+				}
+			}
+		}		
+	}
+
+	// Footer processing (Note: footers omitted for reports)
+	if (cmd_type != CMD_TYPE_REPORT) {
+		cmd_footer->type = TYPE_ARRAY;
+		sprintf(cmd_footer->string, "%d,%d,%d,",JSON_ARRAY_REVISION_FOOTER, status, tg.linelen);
+		tg.linelen = 0;											// reset it so it's only reported once
+		uint16_t strcount = js_serialize_json(cmd, tg.out_buf);	// make JSON string w/o checksum
+		while (tg.out_buf[strcount] != ',') { strcount--; }		// slice at last comma
+		sprintf(tg.out_buf + strcount + 1, "%d]}\n", compute_checksum(tg.out_buf, strcount));
+	} else {
+		cmd_footer->type = TYPE_EMPTY;
+		js_serialize_json(cmd, tg.out_buf);						// make JSON string w/o footer
+	}
+	fprintf(stderr, "%s", tg.out_buf);	// output the result
+}
+
+
 //###########################################################################
 //##### UNIT TESTS ##########################################################
 //###########################################################################
 
+#ifdef __UNIT_TESTS
 #ifdef __UNIT_TEST_JSON
 
 void js_unit_tests()
@@ -357,3 +453,4 @@ void js_unit_tests()
 }
 
 #endif // __UNIT_TEST_JSON
+#endif
