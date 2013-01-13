@@ -124,7 +124,7 @@ void xio_open_generic(uint8_t dev, x_open x_open, x_ctrl x_ctrl, x_gets x_gets, 
 	d->x_gets = x_gets;
 	d->x_getc = x_getc;		// you don't need to bind these unless you are going to use them directly
 	d->x_putc = x_putc;		// they are bound into the fdev stream struct
-	d->fc_func = fc_func;	// flow control function or null FC function
+//	d->fc_func = fc_func;	// flow control function or null FC function
 
 	// setup the stdio FILE struct and link udata back to the device struct
 	fdev_setup_stream(&d->file, x_putc, x_getc, _FDEV_SETUP_RW);
@@ -178,16 +178,16 @@ int xio_ctrl_generic(xioDev *d, const CONTROL_T flags)
 {
 	SETFLAG(XIO_BLOCK,		flag_block);
 	CLRFLAG(XIO_NOBLOCK,	flag_block);
-	SETFLAG(XIO_XOFF,		flag_xoff);
-	CLRFLAG(XIO_NOXOFF,		flag_xoff);
+//	SETFLAG(XIO_XOFF,		flag_xoff);
+//	CLRFLAG(XIO_NOXOFF,		flag_xoff);
 	SETFLAG(XIO_ECHO,		flag_echo);
 	CLRFLAG(XIO_NOECHO,		flag_echo);
-	SETFLAG(XIO_CRLF,		flag_crlf);
-	CLRFLAG(XIO_NOCRLF,		flag_crlf);
-	SETFLAG(XIO_IGNORECR,	flag_ignorecr);
-	CLRFLAG(XIO_NOIGNORECR,	flag_ignorecr);
-	SETFLAG(XIO_IGNORELF,	flag_ignorelf);
-	CLRFLAG(XIO_NOIGNORELF,	flag_ignorelf);
+//	SETFLAG(XIO_CRLF,		flag_crlf);
+//	CLRFLAG(XIO_NOCRLF,		flag_crlf);
+//	SETFLAG(XIO_IGNORECR,	flag_ignorecr);
+//	CLRFLAG(XIO_NOIGNORECR,	flag_ignorecr);
+//	SETFLAG(XIO_IGNORELF,	flag_ignorelf);
+//	CLRFLAG(XIO_NOIGNORELF,	flag_ignorelf);
 	SETFLAG(XIO_LINEMODE,	flag_linemode);
 	CLRFLAG(XIO_NOLINEMODE,	flag_linemode);
 	return (XIO_OK);

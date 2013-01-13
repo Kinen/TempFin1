@@ -18,10 +18,6 @@
 #ifndef kinen_h
 #define kinen_h
 
-#ifndef F_CPU
-#define F_CPU 8000000
-#endif
-
 // function prototypes
 
 void kinen_init(void);

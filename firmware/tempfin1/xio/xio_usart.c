@@ -35,11 +35,6 @@
 #include <avr/sleep.h>					// needed for blocking character writes
 
 #include "xio.h"						// includes for all devices are in here
-//#include "../xmega/xmega_interrupts.h"
-
-//#include "../tinyg.h"					// needed for AXES definition
-//#include "../gpio.h"					// needed for XON/XOFF LED indicator
-//#include "../util.h"					// needed to pick up __debug defines
 
 /******************************************************************************
  * USART CONFIGURATION RECORDS
@@ -53,13 +48,6 @@ struct cfgUSART {
 	x_getc x_getc;			//    stdio getc function
 	x_putc x_putc;			//    stdio putc function
 	fc_func fc_func;		//    flow control callback
-
-	// data and control registers used by this device (moot on the 328 as ther's only 1 usart)
-//	uint8_t *UDR;			// data IO register
-//	uint8_t *UCSRA;			// control/status register A
-//	uint8_t *UCSRB;			// control/status register B
-//	uint8_t	*UBRRL;			// baud rate control register lo
-//	uint8_t	*UBRRH;			// baud rate control register hi
 
 	// initialization values
 	uint32_t baud; 			// baud rate as a long
@@ -76,19 +64,11 @@ static struct cfgUSART const cfgUsart[] PROGMEM = {
 	xio_putc_usart,
 	xio_fc_null,
 
-//	&UDR0,
-//	&UCSR0A,
-//	&UCSR0B,
-//	&UBRR0L,
-//	&UBRR0H,
-
-	9600,					// baud rate
+	115200,					// baud rate
 	0,						// turns baud doubler off
 	( 1<<RXCIE0 | 1<<TXEN0 | 1<<RXEN0)  // enable recv interrupt, TX and RX
 }
 };
-
-//#define USB_BAUD	 XIO_BAUD_115200
 
 // Fast accessors
 #define USART ds[XIO_DEV_USART]
@@ -138,24 +118,19 @@ FILE *xio_open_usart(const uint8_t dev, const char *addr, const CONTROL_T flags)
 
 	UCSR0A = (uint8_t)pgm_read_byte(&cfgUsart[idx].ucsra_init);
 	UCSR0B = (uint8_t)pgm_read_byte(&cfgUsart[idx].ucsrb_init);
-	uint32_t baud = (uint32_t)pgm_read_dword(&cfgUsart[idx].baud);
-	xio_set_baud_usart(dx,baud);
+
+	xio_set_baud_usart(dx,pgm_read_dword(&cfgUsart[idx].baud));
+
+//	uint32_t baud = (uint32_t)pgm_read_dword(&cfgUsart[idx].baud);
+//	xio_set_baud_usart(dx,baud);
 
 	return (&d->file);		// return FILE reference
 }
 
 void xio_set_baud_usart(xioUsart *dx, const uint32_t baud)
 {
-//static void set_baud_rate(long baud) {
-//	uint32_t baud_rate = 115200;
-
-	uint16_t UBRR0_value = (F_CPU / (8 * baud)) - 1;
-	UBRR0H = UBRR0_value >> 8;
-	UBRR0L = UBRR0_value;
+	UBRR0 = (F_CPU / (8 * baud)) - 1;
 	UCSR0A &= ~(1<<U2X0);		// baud doubler off
-
-//	dx->usart->BAUDCTRLA = (uint8_t)pgm_read_byte(&bsel[baud]);
-//	dx->usart->BAUDCTRLB = (uint8_t)pgm_read_byte(&bscale[baud]);
 }
 
 /* 
@@ -209,8 +184,8 @@ static int _gets_helper(xioDev *d, xioUsart *dx)
 	if (--(dx->rx_buf_tail) == 0) {				// advance RX tail (RX q read ptr)
 		dx->rx_buf_tail = RX_BUFFER_SIZE-1;		// -1 avoids off-by-one (OBOE)
 	}
+//	d->fc_func(d);								// run the flow control callback
 	c = dx->rx_buf[dx->rx_buf_tail];			// get char from RX Q
-//	c = (dx->rx_buf[dx->rx_buf_tail] & 0x007F);	// get char from RX Q & mask MSB
 	if (d->flag_echo) d->x_putc(c, stdout);		// conditional echo regardless of character
 
 	if (d->len >= d->size) {					// handle buffer overruns
@@ -230,6 +205,7 @@ static int _gets_helper(xioDev *d, xioUsart *dx)
 
 /*
  *  xio_getc_usart() - generic char reader for USART devices
+ *  USART RX ISR() - This function is hard-wired for the atmega328p config
  *
  *	Compatible with stdio system - may be bound to a FILE handle
  *
@@ -271,7 +247,8 @@ int xio_getc_usart(FILE *stream)
 	if (--(dx->rx_buf_tail) == 0) {					// advance RX tail (RXQ read ptr)
 		dx->rx_buf_tail = RX_BUFFER_SIZE-1;			// -1 avoids off-by-one error (OBOE)
 	}
-	c = (dx->rx_buf[dx->rx_buf_tail] & 0x007F);		// get char from RX buf & mask MSB
+//	d->fc_func(d);									// run the flow control function (USB only)
+	c = dx->rx_buf[dx->rx_buf_tail];				// get char from RX buf
 
 	// Triage the input character for handling. This code does not handle deletes
 	if (d->flag_echo) d->x_putc(c, stdout);			// conditional echo regardless of character
@@ -281,10 +258,6 @@ int xio_getc_usart(FILE *stream)
 	}
 	return(c);
 }
-
-/*
- *  USART RX ISR() - This function is hard-wired for the atmega328p config
- */
 
 ISR(USART_RX_vect)
 {
@@ -300,29 +273,11 @@ ISR(USART_RX_vect)
 			USARTx.rx_buf_head = 1;
 		}
 	}
-/*
-	uint8_t next_head = rx_buffer_head + 1;
-	
-	if (next_head == RX_BUFFER_SIZE) { 
-		next_head = 0;
-	}
-	if (next_head != rx_buffer_tail) {      // Write data to buffer unless it is full.
-		rx_buffer[rx_buffer_head] = data;
-		rx_buffer_head = next_head;    
-	}
-*/
 }
 
 /* 
  * xio_putc_usart() - stdio compatible char writer for usart devices
- * ISR(TX) 
- * 
- * The TX interrupt dilemma: TX interrupts occur when the USART DATA register is 
- * empty (and the ISR must disable interrupts when nothing's left to read, or they 
- * keep firing). If the TX buffer is completely empty (TXCIF is set) then enabling
- * interrupts does no good. The USART won't interrupt and the TX circular buffer 
- * never empties. So the routine that puts chars in the TX buffer must always force
- * an interrupt.
+ * USART TX ISR() - hard-wired for atmega328p 
  */
 int xio_putc_usart(const char c, FILE *stream)
 {
@@ -331,8 +286,6 @@ int xio_putc_usart(const char c, FILE *stream)
 		next_tx_buf_head = TX_BUFFER_SIZE-1; 			// detect wrap and adjust; -1 avoids off-by-one
 	UCSR0B |= (1<<UDRIE0); 								// enable TX interrupts - will keep firing
 	while (next_tx_buf_head == USARTx.tx_buf_tail);		// loop until the buffer has space
-//		sleep_mode(); 									// sleep until there is space in the buffer
-//	USARTx.usart->CTRLA = CTRLA_RXON_TXOFF;				// disable TX interrupt (mutex region)
 	USARTx.tx_buf_head = next_tx_buf_head;				// accept next buffer head
 	USARTx.tx_buf[USARTx.tx_buf_head] = c;				// write char to buffer
 	return (XIO_OK);
@@ -344,14 +297,12 @@ ISR(USART_UDRE_vect)
 		if (--USARTx.tx_buf_tail == 0) 					// advance tail and wrap 
 			USARTx.tx_buf_tail = TX_BUFFER_SIZE-1;
 		UDR0 = USARTx.tx_buf[USARTx.tx_buf_tail];		// Send a byte from the buffer	
-//		USARTx.usart->DATA = USARTx.tx_buf[USARTx.tx_buf_tail];
 	} else {
 		UCSR0B &= ~(1<<UDRIE0);							// turn off interrupts
-//		USARTx.usart->CTRLA = CTRLA_RXON_TXOFF;			// force another interrupt
 	}
 }
 
-/* Fakeout routines
+/* Fakeout routines for testing
  *
  *	xio_queue_RX_string_usart() - fake ISR to put a string in the RX buffer
  *	xio_queue_RX_char_usart() - fake ISR to put a char in the RX buffer
@@ -359,11 +310,6 @@ ISR(USART_UDRE_vect)
  *	String must be NUL terminated but doesn't require a CR or LF
  *	Also has wrappers for USB and RS485
  */
-//void xio_queue_RX_char_usb(const char c) { xio_queue_RX_char_usart(XIO_DEV_USB, c); }
-void xio_queue_RX_string_usb(const char *buf) { xio_queue_RX_string_usart(XIO_DEV_USART, buf); }
-//void xio_queue_RX_char_rs485(const char c) { xio_queue_RX_char_usart(XIO_DEV_RS485, c); }
-//void xio_queue_RX_string_rs485(const char *buf) { xio_queue_RX_string_usart(XIO_DEV_RS485, buf); }
-
 void xio_queue_RX_string_usart(const uint8_t dev, const char *buf)
 {
 	uint8_t i=0;

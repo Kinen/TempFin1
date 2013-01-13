@@ -99,11 +99,11 @@ typedef struct xioDEVICE {							// common device struct (one per dev)
 	// device configuration flags
 	uint8_t flag_block;
 	uint8_t flag_echo;
-	uint8_t flag_crlf;
-	uint8_t flag_ignorecr;
-	uint8_t flag_ignorelf;
+//	uint8_t flag_crlf;
+//	uint8_t flag_ignorecr;
+//	uint8_t flag_ignorelf;
 	uint8_t flag_linemode;
-	uint8_t flag_xoff;						// xon/xoff enabled
+//	uint8_t flag_xoff;						// xon/xoff enabled
 
 	// private working data and runtime flags
 	int size;								// text buffer length (dynamic)

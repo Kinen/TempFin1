@@ -353,30 +353,3 @@ static char _xfer_char(xioSpi *dx, char c_out)
 }
 
 
-/* Ultimate speed test with no branches or masks - 8.25 uSec ber byte
-	dx->data_port->OUTCLR = SPI_SCK_bm; 			// drive clock lo
-	dx->data_port->OUTSET = SPI_MOSI_bm;			// set data bit lo
-	dx->data_port->OUTSET = SPI_SCK_bm; 			// drive clock hi
-	dx->data_port->OUTCLR = SPI_SCK_bm; 			// drive clock lo
-	dx->data_port->OUTCLR = SPI_MOSI_bm;
-	dx->data_port->OUTSET = SPI_SCK_bm; 			// drive clock hi
-	dx->data_port->OUTCLR = SPI_SCK_bm; 			// drive clock lo
-	dx->data_port->OUTSET = SPI_MOSI_bm;			// set data bit lo
-	dx->data_port->OUTSET = SPI_SCK_bm; 			// drive clock hi
-	dx->data_port->OUTCLR = SPI_SCK_bm; 			// drive clock lo
-	dx->data_port->OUTCLR = SPI_MOSI_bm;
-	dx->data_port->OUTSET = SPI_SCK_bm; 			// drive clock hi
-	dx->data_port->OUTCLR = SPI_SCK_bm; 			// drive clock lo
-	dx->data_port->OUTSET = SPI_MOSI_bm;			// set data bit lo
-	dx->data_port->OUTSET = SPI_SCK_bm; 			// drive clock hi
-	dx->data_port->OUTCLR = SPI_SCK_bm; 			// drive clock lo
-	dx->data_port->OUTCLR = SPI_MOSI_bm;
-	dx->data_port->OUTSET = SPI_SCK_bm; 			// drive clock hi
-	dx->data_port->OUTCLR = SPI_SCK_bm; 			// drive clock lo
-	dx->data_port->OUTSET = SPI_MOSI_bm;			// set data bit lo
-	dx->data_port->OUTSET = SPI_SCK_bm; 			// drive clock hi
-	dx->data_port->OUTCLR = SPI_SCK_bm; 			// drive clock lo
-	dx->data_port->OUTCLR = SPI_MOSI_bm;
-	dx->data_port->OUTSET = SPI_SCK_bm; 			// drive clock hi
-*/
-
