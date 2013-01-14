@@ -222,9 +222,10 @@ static int _gets_helper(xioDev *d, xioSpi *dx)
 }
 
 /*
- * xio_getc_spi() - stdio compatible character RX routine for 328 slave
+ * xio_getc_spi() - stdio compatible character PSI RX routine for 328 slave
+ * SPI Slave RX Interrupt() - interrupts on byte received; puts RX byte into RX buffer
  *
- *	This function is always non-blocking or it would create a deadlock.
+ *	getc() is always non-blocking or it would create a deadlock.
  */
 int xio_getc_spi(FILE *stream)
 {
@@ -234,7 +235,6 @@ int xio_getc_spi(FILE *stream)
 	if (SPIx.rx_buf_head == SPIx.rx_buf_tail) {	// RX buffer empty
 		return(_FDEV_ERR);
 	}
-
 	// handle the case where the RX buffer has data
 	if (--(SPIx.rx_buf_tail) == 0) {				// advance RX tail (RXQ read ptr)
 		SPIx.rx_buf_tail = SPI_RX_BUFFER_SIZE-1;	// -1 is OBOE avoidance
@@ -242,49 +242,34 @@ int xio_getc_spi(FILE *stream)
 	return(SPIx.rx_buf[SPIx.rx_buf_tail]);			// return that char from RX buf
 }
 
-/* 
- * SPI Slave RX Interrupt() - interrupts on byte received
- *
- * Uses a 2 phase state machine to toggle back and forth between ADDR and DATA bytes
- */
 ISR(SPI_STC_vect)
 {
-/*
-	// receive address byte
-	if (ki_slave.phase == KINEN_ADDR) {
-		ki_slave.phase = KINEN_DATA;	// advance phase
-		ki_slave.addr = SPDR;		// read and save the address byte
-		if (ki_command == KINEN_WRITE) { // write is simple...
-			SPDR = KINEN_OK_BYTE;			// already saved addr, now return an OK
-		} else {
-			if (ki_slave.addr < KINEN_COMMON_MAX) {	// handle OCB address space
-				SPDR = ki.array[ki_slave.addr];
-			} else {								// handle device address space
-				if ((ki_status = device_read_byte(ki_slave.addr, &ki_slave.data)) == SC_OK) {
-					SPDR = ki_slave.data;
-				} else {
-					SPDR = KINEN_ERR_BYTE;
-				}
-			}
-		}
+	// read the incoming character
+	uint8_t c_rx = SPDR;
+	uint8_t c_tx = ETX;
 
-	// receive data byte
-	} else {
-		ki_slave.phase = KINEN_ADDR;	// advance phase
-		ki_slave.data = SPDR;		// read and save the data byte
-		if (ki_command == KINEN_WRITE) {
-			if (ki_slave.addr < KINEN_COMMON_MAX) {
-				ki_status = _slave_write_byte(ki_slave.addr, ki_slave.data);
-			} else {
-				ki_status = device_write_byte(ki_slave.addr, ki_slave.data);
-			}
+	// stage the next char to transmit on MISO from the TX buffer
+	if (SPIx.tx_buf_head != SPIx.tx_buf_tail) {		// TX buffer empty
+		if (--(SPIx.tx_buf_tail) == 0) {			// advance TX tail (TXQ read ptr)
+			SPIx.tx_buf_tail = SPI_TX_BUFFER_SIZE-1;// -1 is OBOE avoidance
+		}
+		c_tx = SPIx.tx_buf[SPIx.tx_buf_tail];		// get char from TX buf
+	}
+
+	if ((--SPIx.rx_buf_head) == 0) { 				// adv buffer head with wrap
+		SPIx.rx_buf_head = SPI_RX_BUFFER_SIZE-1;
+	}
+	if (SPIx.rx_buf_head != SPIx.rx_buf_tail) {		// buffer is not full
+		SPIx.rx_buf[SPIx.rx_buf_head] = c_rx;		// write char unless full
+	} else { 										// buffer-full - toss the incoming character
+		if ((++SPIx.rx_buf_head) > RX_BUFFER_SIZE-1) {// reset the head
+			SPIx.rx_buf_head = 1;
 		}
 	}
-*/
 }
 
 /*
- * xio_putc_spi() - stdio compatible character TX routine for 328 SPI slave
+ * xio_putc_spi() - stdio compatible character SPI TX routine for 328 slave
  *
  *	Writes a character into the TX buffer for pickup by the Master.
  */
@@ -306,31 +291,4 @@ int xio_putc_spi(const char c, FILE *stream)
 	}
 	return (XIO_OK);
 }
-
-/*
-#define xfer_bit(mask, c_out, c_in) \
-	dx->data_port->OUTCLR = SPI_SCK_bm; \
-	if ((c_out & mask) == 0) { dx->data_port->OUTCLR = SPI_MOSI_bm; } \
-	else { dx->data_port->OUTSET = SPI_MOSI_bm; } \
-	if (dx->data_port->IN & SPI_MISO_bm) c_in |= (mask); \
-	dx->data_port->OUTSET = SPI_SCK_bm;	
-
-static char _xfer_char(xioSpi *dx, char c_out)
-{
-	char c_in = 0;
-
-	dx->ssel_port->OUTCLR = dx->ssbit;			// drive slave select lo (active)
-	xfer_bit(0x80, c_out, c_in);
-	xfer_bit(0x40, c_out, c_in);
-	xfer_bit(0x20, c_out, c_in);
-	xfer_bit(0x10, c_out, c_in);
-	xfer_bit(0x08, c_out, c_in);
-	xfer_bit(0x04, c_out, c_in);
-	xfer_bit(0x02, c_out, c_in);
-	xfer_bit(0x01, c_out, c_in);
-	dx->ssel_port->OUTSET = dx->ssbit;
-
-	return (c_in);
-}
-*/
 
