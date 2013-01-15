@@ -36,13 +36,9 @@
  */
 typedef struct xioSIGNALS {		// signal signalton
 	uint8_t	sig_reset;
-	uint8_t	sig_feedhold;
-	uint8_t	sig_cycle_start;
 } xioSignals;
 
 void sig_init(void);			// initial signal flags
 void sig_reset(void);			// end program (hard reset)
-void sig_feedhold(void);		// pause motion
-void sig_cycle_start(void);		// resume motion
 
 #endif

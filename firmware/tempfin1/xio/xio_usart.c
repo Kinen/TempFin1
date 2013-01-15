@@ -41,33 +41,33 @@
  ******************************************************************************/
 
 struct cfgUSART {		
-	// function and callback bindings - see xio.h for typedefs
-	x_open x_open;			// binding for device open function
-	x_ctrl x_ctrl;			//    ctrl function
-	x_gets x_gets;			//    get string function
-	x_getc x_getc;			//    stdio getc function
-	x_putc x_putc;			//    stdio putc function
-	fc_func fc_func;		//    flow control callback
+		// function and callback bindings - see xio.h for typedefs
+		x_open x_open;			// binding for device open function
+		x_ctrl x_ctrl;			//    ctrl function
+		x_gets x_gets;			//    get string function
+		x_getc x_getc;			//    stdio getc function
+		x_putc x_putc;			//    stdio putc function
+		fc_func fc_func;		//    flow control callback
 
-	// initialization values
-	uint32_t baud; 			// baud rate as a long
-	uint8_t ucsra_init;		// initialization value for usart control/status register A
-	uint8_t ucsrb_init;		// initialization value for usart control/status register B
+		// initialization values
+		uint32_t baud; 			// baud rate as a long
+		uint8_t ucsra_init;		// initialization value for usart control/status register A
+		uint8_t ucsrb_init;		// initialization value for usart control/status register B
 };
 
 static struct cfgUSART const cfgUsart[] PROGMEM = {
-{
-	xio_open_usart,
-	xio_ctrl_generic,
-	xio_gets_usart,
-	xio_getc_usart,
-	xio_putc_usart,
-	xio_fc_null,
+	{
+		xio_open_usart,
+		xio_ctrl_generic,
+		xio_gets_usart,
+		xio_getc_usart,
+		xio_putc_usart,
+		xio_fc_null,
 
-	115200,					// baud rate
-	0,						// turns baud doubler off
-	( 1<<RXCIE0 | 1<<TXEN0 | 1<<RXEN0)  // enable recv interrupt, TX and RX
-}
+		115200,					// baud rate
+		0,						// turns baud doubler off
+		( 1<<RXCIE0 | 1<<TXEN0 | 1<<RXEN0)  // enable recv interrupt, TX and RX
+	}
 };
 
 // Fast accessors

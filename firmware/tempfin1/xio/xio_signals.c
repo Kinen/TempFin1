@@ -34,34 +34,20 @@
 #include <stdio.h>						// precursor for xio.h
 #include <stdbool.h>					// true and false
 #include <avr/pgmspace.h>				// precursor for xio.h
-//#include "../tinyg.h"
+
 #include "xio.h"
 
 /*
  * sig_init()		 - init signals
  * sig_reset()		 - end program (hard)
- * sig_feedhold()	 - stop motion
- * sig_cycle_start() - start or resume motion
  */
 
 void sig_init()
 {
 	sig.sig_reset = false;
-	sig.sig_feedhold = false;
-	sig.sig_cycle_start = false;
 }
 
 inline void sig_reset()					// reset
 {
 	sig.sig_reset = true;
-}
-
-inline void sig_feedhold()				// pause
-{
-	sig.sig_feedhold = true;
-}
-
-inline void sig_cycle_start()			// start or resume
-{
-	sig.sig_cycle_start = true;
 }

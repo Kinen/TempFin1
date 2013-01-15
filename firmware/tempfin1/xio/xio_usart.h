@@ -16,16 +16,14 @@
 #ifndef xio_usart_h
 #define xio_usart_h
 
-#define serial_write(c) xio_putc_usart(c,0)
-
 /******************************************************************************
  * USART DEVICE CONFIGS (applied during device-specific inits)
  ******************************************************************************/
 
 // Buffer sizing
 #define BUFFER_T uint_fast8_t					// fast, but limits buffer to 255 char max
-#define RX_BUFFER_SIZE (BUFFER_T)128			// BUFFER_T can be 8 bits
-#define TX_BUFFER_SIZE (BUFFER_T)128			// BUFFER_T can be 8 bits
+#define RX_BUFFER_SIZE (BUFFER_T)64				// BUFFER_T can be 8 bits
+#define TX_BUFFER_SIZE (BUFFER_T)64				// BUFFER_T can be 8 bits
 
 #define USART_FLAGS (XIO_BLOCK |  XIO_ECHO | XIO_XOFF | XIO_LINEMODE )
 
@@ -57,12 +55,6 @@ void xio_set_baud_usart(xioUsart *dx, const uint32_t baud);
 int xio_gets_usart(xioDev *d, char *buf, const int size);
 int xio_getc_usart(FILE *stream);
 int xio_putc_usart(const char c, FILE *stream);
-
-// handy helpers
-BUFFER_T xio_get_rx_bufcount_usart(const xioUsart *dx);
-BUFFER_T xio_get_tx_bufcount_usart(const xioUsart *dx);
-BUFFER_T xio_get_usb_rx_free(void);
-
 void xio_queue_RX_char_usart(const uint8_t dev, const char c);
 void xio_queue_RX_string_usart(const uint8_t dev, const char *buf);
 

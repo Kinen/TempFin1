@@ -228,38 +228,43 @@ void xio_set_stdout(const uint8_t dev) { stdout = &ds[dev].file; }
 void xio_set_stderr(const uint8_t dev) { stderr = &ds[dev].file; }
 
 
-//########################################################################
+/******************************************************************************
+ * XIO UNIT TESTS
+ ******************************************************************************/
 
-#ifdef __UNIT_TESTS
-#ifdef __UNIT_TEST_XIO
-
-/*
- * xio_tests() - a collection of tests for xio
- */
+#ifdef __XIO_UNIT_TESTS
+static void _spi_loopback_test();
+//static void _pgm_read_test();
 
 void xio_unit_tests()
 {
-	FILE * fdev;
+	_spi_loopback_test();	// never returns
+}
 
-	fdev = xio_open(XIO_DEV_SPI1, 0, SPI_FLAGS);
+void _spi_loopback_test()	// never returns
+{
+	char c = ETX;
+
 	while (true) {
-		xio_putc_spi(0x55, fdev);
+		if ((c = xio_getc(XIO_DEV_SPI)) != _FDEV_ERR) {
+			xio_putc(XIO_DEV_SPI, c);
+		}
 	}
-	
-//	fdev = xio_open(XIO_DEV_USB, 0, USB_FLAGS);
-//	xio_getc_usart(fdev);
-	
+}
+
 /*
+void _pgm_read_test()
+{	
+	FILE *fdev;
+
 	fdev = xio_open(XIO_DEV_PGM, 0, PGM_FLAGS);
-//	xio_puts_pgm("ABCDEFGHIJKLMNOP\n", fdev);
+	xio_puts_pgm("ABCDEFGHIJKLMNOP\n", fdev);
 	xio_putc_pgm('A', fdev);
 	xio_putc_pgm('B', fdev);
 	xio_putc_pgm('C', fdev);
 	xio_getc_pgm(fdev);
 	xio_getc_pgm(fdev);
 	xio_getc_pgm(fdev);
-*/
 }
-
-#endif
-#endif
+*/
+#endif // __UNIT_TESTS

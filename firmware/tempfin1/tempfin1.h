@@ -17,18 +17,17 @@
 #ifndef tempfin1_h
 #define tempfin1_h
 
-#define BUILD_NUMBER 		001.12			// for keeping track of git revisions
+#define BUILD_NUMBER 		002.02			// SPI development
 #define VERSION_NUMBER		0.1				// firmware major version
 #define HARDWARE_VERSION	0.1				// board revision number
 
 /****** DEVELOPMENT SETTINGS ******/
 
-#define __TEST
 //#define __CANNED_STARTUP					// run any canned startup moves
 //#define __DISABLE_PERSISTENCE				// disable EEPROM writes for faster simulation
 //#define __SUPPRESS_STARTUP_MESSAGES 		// what it says
-//#define __DEBUG							// complies debug functions found in test.c
-
+//#define __TF1_UNIT_TESTS					// uncomment to compile and run TempFin1 unit tests
+											// uncomment __XIO_UNIT_TESTS in xio.h if you need those
 
 /******************************************************************************
  * PARAMETERS AND SETTINGS
@@ -262,14 +261,15 @@ void led_off(void);
 void led_toggle(void);
 
 
-/*** UNIT TESTS ENABLED HERE ***/
+/******************************************************************************
+ * DEFINE UNIT TESTS
+ ******************************************************************************/
 
-//#define __UNIT_TEST_TC	// uncomment to enable unit tests
-#ifdef __UNIT_TEST_TC
-void device_unit_tests(void);
-#define	UNIT_TESTS device_unit_tests();
+#ifdef __TF1_UNIT_TESTS
+void tf1_unit_tests(void);
+#define	TF1_UNIT_TESTS tf1_unit_tests();
 #else
-#define	UNIT_TESTS
-#endif // __UNIT_TEST_TC
+#define	TF1_UNIT_TESTS
+#endif // __UNIT_TESTS
 
 #endif

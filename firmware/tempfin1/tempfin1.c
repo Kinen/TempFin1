@@ -36,6 +36,7 @@
 
 static void _controller(void);
 static double _sensor_sample(uint8_t adc_channel);
+static void _unit_tests(void);
 
 // Had to move the struct definitions and declarations to .h file for reporting purposes
 
@@ -52,7 +53,6 @@ int main(void)
 	// system-level inits
 	sys_init();					// do this first
 	xio_init();					// do this second
-	xio_spi_loopback_test();		// never returns
 	kinen_init();				// do this third
 
 	// device level inits
@@ -66,15 +66,20 @@ int main(void)
 	sei(); 						// enable interrupts
 	rpt_initialized();			// send initalization string
 
-	// test code
-	UNIT_TESTS;					// uncomment __UNIT_TEST_TC to enable unit tests
-	heater_on(160);				 // turn heater on for testing
+	_unit_tests();				// run any unit tests that are enabled
 
 	// main loop
 	while (true) {
 		_controller();
 	}
 	return (false);				// never returns
+}
+
+static void _unit_tests(void)
+{
+	XIO_UNIT_TESTS				// uncomment __XIO_UNIT_TESTs in xio.h to enable these unit tests
+	TF1_UNIT_TESTS				// uncomment __TF1_UNIT_TESTs in tempfin1.h to enable unit tests
+	heater_on(160);				// turn heater on for testing
 }
 
 /**** PWM Port Functions ****
@@ -637,20 +642,26 @@ void led_toggle(void)
 }
 
 
-//###########################################################################
-//##### UNIT TESTS ##########################################################
-//###########################################################################
 
-#ifdef __UNIT_TEST_TC
+/******************************************************************************
+ * TEMPERATURE FIN UNIT TESTS
+ ******************************************************************************/
+
+#ifdef __TF1_UNIT_TESTS
 
 #define SETPOINT 200
 
-void device_unit_tests()
+static void _pid_test(void);
+static void _pwm_test(void);
+
+void tf1_unit_tests()
 {
+	_pid_test();
+	_pwm_test();
+}
 
-// PID tests
-
-
+static void _pid_test()
+{
 	pid_init();
 	pid_calculate(SETPOINT, 0);
 	pid_calculate(SETPOINT, SETPOINT-150);
@@ -672,9 +683,10 @@ void device_unit_tests()
 	pid_calculate(SETPOINT, SETPOINT+20);
 	pid_calculate(SETPOINT, SETPOINT+25);
 	pid_calculate(SETPOINT, SETPOINT+50);
+}
 
-// PWM tests
-/*
+static void _pwm_test()
+{
 	pwm_set_freq(50000);
 	pwm_set_freq(10000);
 	pwm_set_freq(5000);
@@ -709,10 +721,9 @@ void device_unit_tests()
 	pwm_set_duty(2);
 	pwm_set_duty(1);
 	pwm_set_duty(0.1);
-*/
-// exception cases
 
+// exception cases
 }
 
-#endif // __UNIT_TEST_TC
+#endif // __UNIT_TESTS
 

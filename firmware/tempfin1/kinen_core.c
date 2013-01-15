@@ -2,7 +2,7 @@
  * kinen_core.c - Kinen Motion Control System main file
  * Part of Kinen Motion Control Project
  *
- * Copyright (c) 2012 Alden S. Hart Jr.
+ * Copyright (c) 2012 - 2013 Alden S. Hart Jr.
  *
  * The Kinen Motion Control System is licensed under the OSHW 1.0 license
  *
@@ -29,25 +29,3 @@ void kinen_init(void)
 {
 	kinen_slave_init();
 }
-
-/*
- * kinen_callback() - kinen event handler
- *
- *	This function should be called from the main loop at a high-priority level.
- *	It is used to perform any polling, long-running continuations, or other 
- *	scheduled tasks
- *
- *	Returns SC_OK or error code for normal operations 
- *	Returns SC_NOOP if no operation was performed
- *	Returns EAGAIN if the function should block lower-priority functions
- *	in the main DISPATCH loop
- */
- /*
-uint8_t kinen_callback(void)
-{
-//	return (SC_OK);			// return from a successful operation
-//	return (SC_EAGAIN);		// return if lower priority tasks should be blocked
-	return (SC_NOOP);		// return if no operation was performed 
-}
-
-*/

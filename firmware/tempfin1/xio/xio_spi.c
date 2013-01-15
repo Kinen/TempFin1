@@ -57,16 +57,6 @@
  *		transfers. Presumably the master would stop polling once it receives an ETX 
  *		from the slave.
  */
-/* ---- Low level SPI stuff ----
- *
- *	Uses Mode3, MSB first. See Atmel Xmega A 8077.doc, page 231
- */
-/* --- Slave operation ----
- *
- *	The slave runs in ASCII streaming mode
- *	
- *
- */
 #include <stdio.h>						// precursor for xio.h
 #include <stdbool.h>					// true and false
 #include <string.h>						// for memset
@@ -82,6 +72,7 @@ static int _gets_helper(xioDev *d, xioSpi *dx);
 /******************************************************************************
  * SPI CONFIGURATION RECORDS
  ******************************************************************************/
+// SPI is setup below for mode3, MSB first. See Atmel Xmega A 8077.doc, page 231
 
 struct cfgSPI {
 		x_open x_open;			// see xio.h for typedefs
@@ -93,7 +84,7 @@ struct cfgSPI {
 
 		// initialization values
 		uint8_t spcr; 			// initialization value for SPI configuration register
-		uint8_t outbits; 		// bits to set as outputsx in PORTB
+		uint8_t outbits; 		// bits to set as outputs in PORTB
 };
 
 static struct cfgSPI const cfgSpi[] PROGMEM = {
@@ -203,7 +194,7 @@ ISR(SPI_STC_vect)
 /*
  * xio_putc_spi() - stdio compatible character SPI TX routine for 328 slave
  *
- *	Writes a character into the TX buffer for pickup by the Master.
+ *	Write a character into the TX buffer for MISO piggyback transmission
  */
 int xio_putc_spi(const char c, FILE *stream)
 {
@@ -311,13 +302,3 @@ static int _gets_helper(xioDev *d, xioSpi *dx)
 	return (XIO_EAGAIN);
 }
 
-void xio_spi_loopback_test()	// never returns
-{
-	char c = ETX;
-
-	while (true) {
-		if ((c = xio_getc(XIO_DEV_SPI)) != _FDEV_ERR) {
-			xio_putc(XIO_DEV_SPI, c);
-		}
-	}
-}

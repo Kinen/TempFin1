@@ -1,21 +1,8 @@
 /*
- * xio.h - Xmega IO devices - common header file
- * Part of TinyG project
+ * xio.h - eXtended IO devices - common header file
+ * Part of Kinen project
  *
  * Copyright (c) 2010 - 2013 Alden S. Hart Jr.
- *
- * TinyG is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by 
- * the Free Software Foundation, either version 3 of the License, 
- * or (at your option) any later version.
- *
- * TinyG is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of 
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the GNU General Public License for details.
- *
- * You should have received a copy of the GNU General Public License 
- * along with TinyG  If not, see <http://www.gnu.org/licenses/>.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -25,16 +12,31 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-/* XIO devices are compatible with avr-gcc stdio, so formatted printing 
- * is supported. To use this sub-system outside of TinyG you may need 
- * some defines in tinyg.h. See notes at end of this file for more details.
+/* ---- General Notes and Project help ----
+ *
+ * XIO devices are compatible with avr-gcc stdio, So formatted printing 
+ * is supported. printf with the math and floating point libs (libm.a and 
+ * libprintf_flt.a) actually took LESS program space on the 328 than the 
+ * original Arduino serial.c/.h and print.c/.h it replaced. Go figure.
  */
 /* Note: anything that includes xio.h first needs the following:
  * 	#include <stdio.h>				// needed for FILE def'n
  *	#include <stdbool.h>			// needed for true and false 
  *	#include <avr/pgmspace.h>		// defines prog_char, PSTR
+ *
+ * It must include the following libraries:
+ * 	   libm.a
+ * 	   libprintf_flt.a
+ *
+ * It must be linked with these options:
+ * 	  -Wl,-u,vfprintf    (NOTE: Wl --->thats: W"lower-case ell" not W"the number one"
+ *	  -lprintf_flt
+ * 	  -lm
+ *
+ * ref: http://www.avrfreaks.net/index.php?name=PNphpBB2&file=printview&t=92299&start=0
  */
-/* Note: This file contains load of sub-includes near the middle
+/* 
+ * Note: This file contains load of sub-includes near the middle
  *	#include "xio_file.h"
  *	#include "xio_usart.h"
  *	#include "xio_spi.h"
@@ -137,10 +139,12 @@ typedef struct xioDEVICE {							// common device struct (one per dev)
 	// device configuration flags
 	uint8_t flag_block;
 	uint8_t flag_echo;
-//	uint8_t flag_crlf;
-//	uint8_t flag_ignorecr;
-//	uint8_t flag_ignorelf;
 	uint8_t flag_linemode;
+
+	// these flags are not used in the 328 implementation
+//	uint8_t flag_crlf;						// expand LFs to CR + LF on TX
+//	uint8_t flag_ignorecr;					// ignore CRs on RX
+//	uint8_t flag_ignorelf;					// ignore LFs on RX
 //	uint8_t flag_xoff;						// xon/xoff enabled
 
 	// private working data and runtime flags
@@ -148,7 +152,7 @@ typedef struct xioDEVICE {							// common device struct (one per dev)
 	uint8_t len;							// chars read so far (buf array index)
 	uint8_t signal;							// signal value
 	uint8_t flag_in_line;					// used as a state variable for line reads
-	uint8_t flag_eol;						// end of line detected
+	uint8_t flag_eol;						// end of line (message) detected
 	uint8_t flag_eof;						// end of file detected
 	char *buf;								// text buffer binding (can be dynamic)
 } xioDev;
@@ -242,11 +246,6 @@ enum xioSignals {
 	XIO_SIG_RESET,			// cancel operation immediately
 	XIO_SIG_DELETE,			// backspace or delete character (BS, DEL)
 	XIO_SIG_BELL			// BELL character (BEL, ^g)
-
-	// application signals
-//	XIO_SIG_FEEDHOLD,		// pause operation
-//	XIO_SIG_CYCLE_START,	// start or resume operation
-
 };
 
 /* Some useful ASCII definitions */
@@ -302,12 +301,16 @@ enum xioCodes {
 #define XIO_ERRNO_MAX XIO_BUFFER_FULL_NON_FATAL
 
 
-#define __UNIT_TEST_XIO			// include and run xio unit tests
-#ifdef __UNIT_TEST_XIO
-void xio_unit_tests(void);
-#define	XIO_UNITS xio_unit_tests();
-#else
-#define	XIO_UNITS
-#endif // __UNIT_TEST_XIO
+/******************************************************************************
+ * SETUP XIO UNIT TESTS
+ ******************************************************************************/
 
-#endif
+#define __XIO_UNIT_TESTS	// uncomment this to compile nd run XIO unit tests
+#ifdef __XIO_UNIT_TESTS
+void xio_unit_tests(void);
+#define	XIO_UNIT_TESTS xio_unit_tests();
+#else
+#define	XIO_UNIT_TESTS
+#endif // __XIO_UNIT_TESTS
+
+#endif // xio_h

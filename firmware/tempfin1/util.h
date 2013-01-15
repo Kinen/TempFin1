@@ -18,13 +18,13 @@
 
 /****** Global Scope Variables and Functions ******/
 
-double min3(double x1, double x2, double x3);
-double min4(double x1, double x2, double x3, double x4);
-double max3(double x1, double x2, double x3);
-double max4(double x1, double x2, double x3, double x4);
-uint8_t isnumber(char c);
-uint8_t read_double(char *buf, uint8_t *i, double *double_ptr);
-uint16_t compute_checksum(char const *string, const uint16_t length);
+//double min3(double x1, double x2, double x3);
+//double min4(double x1, double x2, double x3, double x4);
+//double max3(double x1, double x2, double x3);
+//double max4(double x1, double x2, double x3, double x4);
+//uint8_t isnumber(char c);
+//uint8_t read_double(char *buf, uint8_t *i, double *double_ptr);
+//uint16_t compute_checksum(char const *string, const uint16_t length);
 double std_dev(double a[], uint8_t n, double *mean);
 
 // ritorno is a handy way to provide exception returns - it returns only 

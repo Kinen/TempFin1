@@ -19,17 +19,8 @@
 #define kinen_h
 
 // function prototypes
-
 void kinen_init(void);
-//uint8_t kinen_callback(void);
 
-// Kinen core singleton
-
-typedef struct KinenCoreSingleton {
-	uint8_t kinen_master;		// set 'true' if this is a master
-//	uint8_t array[16];			// it's here so it can be used by both master and slave
-} KinenCore;
-KinenCore ki;					// allocate the singleton
 
 // Kinen definitions
 
@@ -41,7 +32,7 @@ KinenCore ki;					// allocate the singleton
 #define DEVICE_TYPE_EXTRUDER_CONTROLLER 3
 #define DEVICE_TYPE_TEMPERATURE_CONTROLLER 4
 
-// Kinen Status Codes
+// Status Codes
 
 #define	SC_OK 0							// function completed OK
 #define	SC_ERROR 1						// generic error return (EPERM)
