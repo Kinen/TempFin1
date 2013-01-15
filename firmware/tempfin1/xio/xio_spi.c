@@ -61,6 +61,12 @@
  *
  *	Uses Mode3, MSB first. See Atmel Xmega A 8077.doc, page 231
  */
+/* --- Slave operation ----
+ *
+ *	The slave runs in ASCII streaming mode
+ *	
+ *
+ */
 #include <stdio.h>						// precursor for xio.h
 #include <stdbool.h>					// true and false
 #include <string.h>						// for memset
@@ -72,38 +78,37 @@
 
 // statics
 static int _gets_helper(xioDev *d, xioSpi *dx);
-static char _xfer_char(xioSpi *dx, char c_out);
 
 /******************************************************************************
  * SPI CONFIGURATION RECORDS
  ******************************************************************************/
 
 struct cfgSPI {
-	x_open x_open;			// see xio.h for typedefs
-	x_ctrl x_ctrl;
-	x_gets x_gets;
-	x_getc x_getc;
-	x_putc x_putc;
-	fc_func fc_func;
+		x_open x_open;			// see xio.h for typedefs
+		x_ctrl x_ctrl;
+		x_gets x_gets;
+		x_getc x_getc;
+		x_putc x_putc;
+		fc_func fc_func;
 
-	// initialization values
-	uint8_t spcr; 			// initialization value for SPI configuration register
-	uint8_t outbits; 		// bits to set as outputsx in PORTB
+		// initialization values
+		uint8_t spcr; 			// initialization value for SPI configuration register
+		uint8_t outbits; 		// bits to set as outputsx in PORTB
 };
 
 static struct cfgSPI const cfgSpi[] PROGMEM = {
-{
-	xio_open_spi,			// open function
-	xio_ctrl_generic, 		// ctrl function
-	xio_gets_spi,			// get string function
-	xio_getc_spi,			// stdio getc function
-	xio_putc_spi,			// stdio putc function
-	xio_fc_null,			// flow control callback
+	{
+		xio_open_spi,			// open function
+		xio_ctrl_generic, 		// ctrl function
+		xio_gets_spi,			// get string function
+		xio_getc_spi,			// stdio getc function
+		xio_putc_spi,			// stdio putc function
+		xio_fc_null,			// flow control callback
 
-	(1<<SPIE | 1<<SPE | 1<<SPIE | 1<<SPE),	// mode 3 operation
-//	(1<<SPIE | 1<<SPE)						// mode 0 operation
-	(1<<DDB4)				// Set SCK, MOSI, SS to input, MISO to output
-}
+		(1<<SPIE | 1<<SPE | 1<<CPOL | 1<<CPHA),	// mode 3 operation / slave
+//		(1<<SPIE | 1<<SPE)						// mode 0 operation / slave
+		(1<<DDB4)				// Set SCK, MOSI, SS to input, MISO to output
+	}
 };
 
 // fast accessors
@@ -156,9 +161,94 @@ FILE *xio_open_spi(const uint8_t dev, const char *addr, const CONTROL_T flags)
 	return (&d->file);							// return FILE reference
 }
 
+/*
+ * SPI Slave Interrupt() - interrupts on RX byte received
+ *
+ *	Puts RX byte into RX buffer
+ *	Transfers next TX byte to SPDR of ETX if none available
+ */
+
+ISR(SPI_STC_vect)
+{
+	// read the incoming character
+	uint8_t c_rx = SPDR;
+
+	// stage the next char to transmit on MISO from the TX buffer
+	if (SPIx.tx_buf_head != SPIx.tx_buf_tail) {		// TX buffer is not empty
+		if (--(SPIx.tx_buf_tail) == 0) {			// advance TX tail (TXQ read ptr)
+			SPIx.tx_buf_tail = SPI_TX_BUFFER_SIZE-1;// -1 is OBOE avoidance
+		}
+		SPDR = SPIx.tx_buf[SPIx.tx_buf_tail];		// stage char from TX buf to MISO out
+	} else {
+		SPDR = ETX;
+	}
+	// detect a collision - next MOSI transmission started before SPDR was written - dang!
+//	if (SPSR & 1<<WCOL) {
+//		what to do?		
+//	}
+
+	// put incoming char into RX buffer
+	if ((--SPIx.rx_buf_head) == 0) { 				// adv buffer head with wrap
+		SPIx.rx_buf_head = SPI_RX_BUFFER_SIZE-1;
+	}
+	if (SPIx.rx_buf_head != SPIx.rx_buf_tail) {		// buffer is not full
+		SPIx.rx_buf[SPIx.rx_buf_head] = c_rx;		// write char unless full
+	} else { 										// buffer-full - toss the incoming character
+		if ((++SPIx.rx_buf_head) > RX_BUFFER_SIZE-1) {// reset the head
+			SPIx.rx_buf_head = 1;
+		}
+	}
+}
+
+/*
+ * xio_putc_spi() - stdio compatible character SPI TX routine for 328 slave
+ *
+ *	Writes a character into the TX buffer for pickup by the Master.
+ */
+int xio_putc_spi(const char c, FILE *stream)
+{
+//	xioSpi *dx = ((xioDev *)stream->udata)->x;	// cache SPI device struct pointer
+												// replace SPIx. with dx-> to use
+
+	if ((--(SPIx.tx_buf_head)) == 0) { 			// adv buffer head with wrap
+		SPIx.tx_buf_head = SPI_TX_BUFFER_SIZE-1;
+	}
+	if (SPIx.tx_buf_head != SPIx.tx_buf_tail) {	// buffer is not full
+		SPIx.tx_buf[SPIx.tx_buf_head] = c;		// write char to buffer
+	} else { 									// buffer-full - toss the incoming character
+		if ((++(SPIx.tx_buf_head)) > SPI_TX_BUFFER_SIZE-1) { // reset the head
+			SPIx.tx_buf_head = 1;
+		}
+		((xioDev *)stream->udata)->signal = XIO_SIG_OVERRUN; // signal a buffer overflow
+		return (_FDEV_ERR);
+	}
+	return (XIO_OK);
+}
+
+/*
+ * xio_getc_spi() - stdio compatible character PSI RX routine for 328 slave
+ *
+ *	All getc_spi() does is read from the RX buffer. If no character is available it 
+ *	returns an error. getc() is always non-blocking or it would create a deadlock.
+ */
+int xio_getc_spi(FILE *stream)
+{
+//	xioSpi *dx = ((xioDev *)stream->udata)->x;	// cache SPI device struct pointer
+
+	// handle the RX buffer empty case
+	if (SPIx.rx_buf_head == SPIx.rx_buf_tail) {	// RX buffer empty
+		return(_FDEV_ERR);
+	}
+	// handle the case where the RX buffer has data
+	if (--(SPIx.rx_buf_tail) == 0) {				// advance RX tail (RXQ read ptr)
+		SPIx.rx_buf_tail = SPI_RX_BUFFER_SIZE-1;	// -1 is OBOE avoidance
+	}
+	return(SPIx.rx_buf[SPIx.rx_buf_tail]);			// return that char from RX buf
+}
+
 /* 
  *	xio_gets_spi() - read a complete line from an SPI device
- * _gets_helper() 	 - non-blocking character getter for gets
+ * _gets_helper()  - non-blocking character getter for gets
  *
  *	Retains line context across calls - so it can be called multiple times.
  *	Reads as many characters as it can until any of the following is true:
@@ -221,74 +311,13 @@ static int _gets_helper(xioDev *d, xioSpi *dx)
 	return (XIO_EAGAIN);
 }
 
-/*
- * xio_getc_spi() - stdio compatible character PSI RX routine for 328 slave
- * SPI Slave RX Interrupt() - interrupts on byte received; puts RX byte into RX buffer
- *
- *	getc() is always non-blocking or it would create a deadlock.
- */
-int xio_getc_spi(FILE *stream)
+void xio_spi_loopback_test()	// never returns
 {
-//	xioSpi *dx = ((xioDev *)stream->udata)->x;	// cache SPI device struct pointer
+	char c = ETX;
 
-	// handle the RX buffer empty case
-	if (SPIx.rx_buf_head == SPIx.rx_buf_tail) {	// RX buffer empty
-		return(_FDEV_ERR);
-	}
-	// handle the case where the RX buffer has data
-	if (--(SPIx.rx_buf_tail) == 0) {				// advance RX tail (RXQ read ptr)
-		SPIx.rx_buf_tail = SPI_RX_BUFFER_SIZE-1;	// -1 is OBOE avoidance
-	}
-	return(SPIx.rx_buf[SPIx.rx_buf_tail]);			// return that char from RX buf
-}
-
-ISR(SPI_STC_vect)
-{
-	// read the incoming character
-	uint8_t c_rx = SPDR;
-	uint8_t c_tx = ETX;
-
-	// stage the next char to transmit on MISO from the TX buffer
-	if (SPIx.tx_buf_head != SPIx.tx_buf_tail) {		// TX buffer empty
-		if (--(SPIx.tx_buf_tail) == 0) {			// advance TX tail (TXQ read ptr)
-			SPIx.tx_buf_tail = SPI_TX_BUFFER_SIZE-1;// -1 is OBOE avoidance
-		}
-		c_tx = SPIx.tx_buf[SPIx.tx_buf_tail];		// get char from TX buf
-	}
-
-	if ((--SPIx.rx_buf_head) == 0) { 				// adv buffer head with wrap
-		SPIx.rx_buf_head = SPI_RX_BUFFER_SIZE-1;
-	}
-	if (SPIx.rx_buf_head != SPIx.rx_buf_tail) {		// buffer is not full
-		SPIx.rx_buf[SPIx.rx_buf_head] = c_rx;		// write char unless full
-	} else { 										// buffer-full - toss the incoming character
-		if ((++SPIx.rx_buf_head) > RX_BUFFER_SIZE-1) {// reset the head
-			SPIx.rx_buf_head = 1;
+	while (true) {
+		if ((c = xio_getc(XIO_DEV_SPI)) != _FDEV_ERR) {
+			xio_putc(XIO_DEV_SPI, c);
 		}
 	}
 }
-
-/*
- * xio_putc_spi() - stdio compatible character SPI TX routine for 328 slave
- *
- *	Writes a character into the TX buffer for pickup by the Master.
- */
-int xio_putc_spi(const char c, FILE *stream)
-{
-	xioSpi *dx = ((xioDev *)stream->udata)->x;	// cache SPI device struct pointer
-
-	if ((--(dx->tx_buf_head)) == 0) { 			// adv buffer head with wrap
-		dx->tx_buf_head = SPI_TX_BUFFER_SIZE-1;
-	}
-	if (dx->tx_buf_head != dx->tx_buf_tail) {	// buffer is not full
-		dx->tx_buf[dx->tx_buf_head] = c;		// write char to buffer
-	} else { 									// buffer-full - toss the incoming character
-		if ((++(dx->tx_buf_head)) > SPI_TX_BUFFER_SIZE-1) {	// reset the head
-			dx->tx_buf_head = 1;
-		}
-		((xioDev *)stream->udata)->signal = XIO_SIG_OVERRUN; // signal a buffer overflow
-		return (_FDEV_ERR);
-	}
-	return (XIO_OK);
-}
-

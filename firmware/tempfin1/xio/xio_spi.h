@@ -56,4 +56,6 @@ int xio_gets_spi(xioDev *d, char *buf, const int size);
 int xio_putc_spi(const char c, FILE *stream);
 int xio_getc_spi(FILE *stream);
 
+void xio_spi_loopback_test(void);
+
 #endif

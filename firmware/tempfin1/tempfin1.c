@@ -52,6 +52,7 @@ int main(void)
 	// system-level inits
 	sys_init();					// do this first
 	xio_init();					// do this second
+	xio_spi_loopback_test();		// never returns
 	kinen_init();				// do this third
 
 	// device level inits

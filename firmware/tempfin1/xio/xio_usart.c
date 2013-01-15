@@ -136,73 +136,30 @@ void xio_set_baud_usart(xioUsart *dx, const uint32_t baud)
 }
 
 /* 
- *	xio_gets_usart() - read a complete line from the usart device
- * _gets_helper() 	 - non-blocking character getter for gets
- *
- *	Retains line context across calls - so it can be called multiple times.
- *	Reads as many characters as it can until any of the following is true:
- *
- *	  - RX buffer is empty on entry (return XIO_EAGAIN)
- *	  - no more chars to read from RX buffer (return XIO_EAGAIN)
- *	  - read would cause output buffer overflow (return XIO_BUFFER_FULL)
- *	  - read returns complete line (returns XIO_OK)
- *
- *	Note: LINEMODE flag in device struct is ignored. It's ALWAYS LINEMODE here.
- *	Note: This function assumes ignore CR and ignore LF handled upstream before the RX buffer
+ * xio_putc_usart() - stdio compatible char writer for usart devices
+ * USART TX ISR() - hard-wired for atmega328p 
  */
-int xio_gets_usart(xioDev *d, char *buf, const int size)
+int xio_putc_usart(const char c, FILE *stream)
 {
-	xioUsart *dx =(xioUsart *)d->x;				// USART pointer
-
-	if (d->flag_in_line == false) {				// first time thru initializations
-		d->flag_in_line = true;					// yes, we are busy getting a line
-		d->len = 0;								// zero buffer
-		d->buf = buf;
-		d->size = size;
-		d->signal = XIO_SIG_OK;					// reset signal register
-	}
-	while (true) {
-		switch (_gets_helper(d,dx)) {
-			case (XIO_BUFFER_EMPTY):			// empty condition
-				return (XIO_EAGAIN);
-			case (XIO_BUFFER_FULL_NON_FATAL):	// overrun err
-				return (XIO_BUFFER_FULL_NON_FATAL);
-			case (XIO_EOL): 					// got complete line
-				return (XIO_OK);
-			case (XIO_EAGAIN):					// loop for next character
-				break;
-		}
-	}
+	BUFFER_T next_tx_buf_head = USARTx.tx_buf_head-1;	// set next head while leaving current one alone
+	if (next_tx_buf_head == 0)
+		next_tx_buf_head = TX_BUFFER_SIZE-1; 			// detect wrap and adjust; -1 avoids off-by-one
+	UCSR0B |= (1<<UDRIE0); 								// enable TX interrupts - will keep firing
+	while (next_tx_buf_head == USARTx.tx_buf_tail);		// loop until the buffer has space
+	USARTx.tx_buf_head = next_tx_buf_head;				// accept next buffer head
+	USARTx.tx_buf[USARTx.tx_buf_head] = c;				// write char to buffer
 	return (XIO_OK);
 }
 
-static int _gets_helper(xioDev *d, xioUsart *dx)
+ISR(USART_UDRE_vect)
 {
-	char c = NUL;
-
-	if (dx->rx_buf_head == dx->rx_buf_tail) {	// RX ISR buffer empty
-		return(XIO_BUFFER_EMPTY);				// stop reading
+	if (USARTx.tx_buf_head != USARTx.tx_buf_tail) {		// buffer has data
+		if (--USARTx.tx_buf_tail == 0) 					// advance tail and wrap 
+			USARTx.tx_buf_tail = TX_BUFFER_SIZE-1;
+		UDR0 = USARTx.tx_buf[USARTx.tx_buf_tail];		// Send a byte from the buffer	
+	} else {
+		UCSR0B &= ~(1<<UDRIE0);							// turn off interrupts
 	}
-	if (--(dx->rx_buf_tail) == 0) {				// advance RX tail (RX q read ptr)
-		dx->rx_buf_tail = RX_BUFFER_SIZE-1;		// -1 avoids off-by-one (OBOE)
-	}
-//	d->fc_func(d);								// run the flow control callback
-	c = dx->rx_buf[dx->rx_buf_tail];			// get char from RX Q
-	if (d->flag_echo) d->x_putc(c, stdout);		// conditional echo regardless of character
-
-	if (d->len >= d->size) {					// handle buffer overruns
-		d->buf[d->size] = NUL;					// terminate line (d->size is zero based)
-		d->signal = XIO_SIG_EOL;
-		return (XIO_BUFFER_FULL_NON_FATAL);
-	}
-	if ((c == CR) || (c == LF)) {				// handle CR, LF termination
-		d->buf[(d->len)++] = NUL;
-		d->signal = XIO_SIG_EOL;
-		d->flag_in_line = false;				// clear in-line state (reset)
-		return (XIO_EOL);						// return for end-of-line
-	}
-	d->buf[(d->len)++] = c;						// write character to buffer
-	return (XIO_EAGAIN);
 }
 
 /*
@@ -276,33 +233,76 @@ ISR(USART_RX_vect)
 		}
 	}
 }
-
 /* 
- * xio_putc_usart() - stdio compatible char writer for usart devices
- * USART TX ISR() - hard-wired for atmega328p 
+ *	xio_gets_usart() - read a complete line from the usart device
+ * _gets_helper() 	 - non-blocking character getter for gets
+ *
+ *	Retains line context across calls - so it can be called multiple times.
+ *	Reads as many characters as it can until any of the following is true:
+ *
+ *	  - RX buffer is empty on entry (return XIO_EAGAIN)
+ *	  - no more chars to read from RX buffer (return XIO_EAGAIN)
+ *	  - read would cause output buffer overflow (return XIO_BUFFER_FULL)
+ *	  - read returns complete line (returns XIO_OK)
+ *
+ *	Note: LINEMODE flag in device struct is ignored. It's ALWAYS LINEMODE here.
+ *	Note: This function assumes ignore CR and ignore LF handled upstream before the RX buffer
  */
-int xio_putc_usart(const char c, FILE *stream)
+int xio_gets_usart(xioDev *d, char *buf, const int size)
 {
-	BUFFER_T next_tx_buf_head = USARTx.tx_buf_head-1;	// set next head while leaving current one alone
-	if (next_tx_buf_head == 0)
-		next_tx_buf_head = TX_BUFFER_SIZE-1; 			// detect wrap and adjust; -1 avoids off-by-one
-	UCSR0B |= (1<<UDRIE0); 								// enable TX interrupts - will keep firing
-	while (next_tx_buf_head == USARTx.tx_buf_tail);		// loop until the buffer has space
-	USARTx.tx_buf_head = next_tx_buf_head;				// accept next buffer head
-	USARTx.tx_buf[USARTx.tx_buf_head] = c;				// write char to buffer
+	xioUsart *dx =(xioUsart *)d->x;				// USART pointer
+
+	if (d->flag_in_line == false) {				// first time thru initializations
+		d->flag_in_line = true;					// yes, we are busy getting a line
+		d->len = 0;								// zero buffer
+		d->buf = buf;
+		d->size = size;
+		d->signal = XIO_SIG_OK;					// reset signal register
+	}
+	while (true) {
+		switch (_gets_helper(d,dx)) {
+			case (XIO_BUFFER_EMPTY):			// empty condition
+				return (XIO_EAGAIN);
+			case (XIO_BUFFER_FULL_NON_FATAL):	// overrun err
+				return (XIO_BUFFER_FULL_NON_FATAL);
+			case (XIO_EOL): 					// got complete line
+				return (XIO_OK);
+			case (XIO_EAGAIN):					// loop for next character
+				break;
+		}
+	}
 	return (XIO_OK);
 }
 
-ISR(USART_UDRE_vect)
+static int _gets_helper(xioDev *d, xioUsart *dx)
 {
-	if (USARTx.tx_buf_head != USARTx.tx_buf_tail) {		// buffer has data
-		if (--USARTx.tx_buf_tail == 0) 					// advance tail and wrap 
-			USARTx.tx_buf_tail = TX_BUFFER_SIZE-1;
-		UDR0 = USARTx.tx_buf[USARTx.tx_buf_tail];		// Send a byte from the buffer	
-	} else {
-		UCSR0B &= ~(1<<UDRIE0);							// turn off interrupts
+	char c = NUL;
+
+	if (dx->rx_buf_head == dx->rx_buf_tail) {	// RX ISR buffer empty
+		return(XIO_BUFFER_EMPTY);				// stop reading
 	}
+	if (--(dx->rx_buf_tail) == 0) {				// advance RX tail (RX q read ptr)
+		dx->rx_buf_tail = RX_BUFFER_SIZE-1;		// -1 avoids off-by-one (OBOE)
+	}
+//	d->fc_func(d);								// run the flow control callback
+	c = dx->rx_buf[dx->rx_buf_tail];			// get char from RX Q
+	if (d->flag_echo) d->x_putc(c, stdout);		// conditional echo regardless of character
+
+	if (d->len >= d->size) {					// handle buffer overruns
+		d->buf[d->size] = NUL;					// terminate line (d->size is zero based)
+		d->signal = XIO_SIG_EOL;
+		return (XIO_BUFFER_FULL_NON_FATAL);
+	}
+	if ((c == CR) || (c == LF)) {				// handle CR, LF termination
+		d->buf[(d->len)++] = NUL;
+		d->signal = XIO_SIG_EOL;
+		d->flag_in_line = false;				// clear in-line state (reset)
+		return (XIO_EOL);						// return for end-of-line
+	}
+	d->buf[(d->len)++] = c;						// write character to buffer
+	return (XIO_EAGAIN);
 }
+
 
 /* Fakeout routines for testing
  *
