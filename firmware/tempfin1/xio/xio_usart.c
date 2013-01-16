@@ -43,11 +43,11 @@
 struct cfgUSART {		
 		// function and callback bindings - see xio.h for typedefs
 		x_open x_open;			// binding for device open function
-		x_ctrl x_ctrl;			//    ctrl function
-		x_gets x_gets;			//    get string function
-		x_getc x_getc;			//    stdio getc function
-		x_putc x_putc;			//    stdio putc function
-		fc_func fc_func;		//    flow control callback
+		x_ctrl x_ctrl;			// ctrl function
+		x_gets x_gets;			// get string function
+		x_getc x_getc;			// stdio compatible getc function
+		x_putc x_putc;			// stdio compatible putc function
+		fc_func fc_func;		// flow control callback
 
 		// initialization values
 		uint32_t baud; 			// baud rate as a long
@@ -303,7 +303,6 @@ static int _gets_helper(xioDev *d, xioUsart *dx)
 	return (XIO_EAGAIN);
 }
 
-
 /* Fakeout routines for testing
  *
  *	xio_queue_RX_string_usart() - fake ISR to put a string in the RX buffer
@@ -312,6 +311,7 @@ static int _gets_helper(xioDev *d, xioUsart *dx)
  *	String must be NUL terminated but doesn't require a CR or LF
  *	Also has wrappers for USB and RS485
  */
+ /*
 void xio_queue_RX_string_usart(const uint8_t dev, const char *buf)
 {
 	uint8_t i=0;
@@ -337,3 +337,4 @@ void xio_queue_RX_char_usart(const uint8_t dev, const char c)
 		dx->rx_buf_head = 1;
 	}
 }
+*/

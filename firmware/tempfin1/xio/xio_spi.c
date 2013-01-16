@@ -148,7 +148,6 @@ FILE *xio_open_spi(const uint8_t dev, const char *addr, const CONTROL_T flags)
 	PRR &= ~PRSPI_bm;			// Enable SPI in the power reduction register (system.h)
 	SPCR |= (uint8_t)pgm_read_byte(&cfgSpi[idx].spcr);
 	DDRB |= (uint8_t)pgm_read_byte(&cfgSpi[idx].outbits);
-
 	return (&d->file);							// return FILE reference
 }
 
@@ -166,16 +165,17 @@ ISR(SPI_STC_vect)
 
 	// stage the next char to transmit on MISO from the TX buffer
 	if (SPIx.tx_buf_head != SPIx.tx_buf_tail) {		// TX buffer is not empty
-		if (--(SPIx.tx_buf_tail) == 0) {			// advance TX tail (TXQ read ptr)
-			SPIx.tx_buf_tail = SPI_TX_BUFFER_SIZE-1;// -1 is OBOE avoidance
-		}
+		advance(SPIx.tx_buf_tail, SPI_TX_BUFFER_SIZE-1);	
+//		if (--(SPIx.tx_buf_tail) == 0) {			// advance TX tail (TXQ read ptr)
+//			SPIx.tx_buf_tail = SPI_TX_BUFFER_SIZE-1;// -1 is OBOE avoidance
+//		}
 		SPDR = SPIx.tx_buf[SPIx.tx_buf_tail];		// stage char from TX buf to MISO out
 	} else {
 		SPDR = ETX;
 	}
 	// detect a collision - next MOSI transmission started before SPDR was written - dang!
 //	if (SPSR & 1<<WCOL) {
-//		what to do?		
+//		led_on();				// what to do?		
 //	}
 
 	// put incoming char into RX buffer
@@ -198,12 +198,20 @@ ISR(SPI_STC_vect)
  */
 int xio_putc_spi(const char c, FILE *stream)
 {
-//	xioSpi *dx = ((xioDev *)stream->udata)->x;	// cache SPI device struct pointer
-												// replace SPIx. with dx-> to use
+//	BUFFER_T temp_tx_head;
+	advance(SPIx.tx_buf_head, SPI_TX_BUFFER_SIZE-1);	
 
-	if ((--(SPIx.tx_buf_head)) == 0) { 			// adv buffer head with wrap
-		SPIx.tx_buf_head = SPI_TX_BUFFER_SIZE-1;
+	if (SPIx.tx_buf_head == SPIx.tx_buf_tail) {				// buffer is full
+		if ((++(SPIx.tx_buf_head)) > SPI_TX_BUFFER_SIZE-1) { // reset the head
+			SPIx.tx_buf_head = 1;
+		}
+		((xioDev *)stream->udata)->signal = XIO_SIG_OVERRUN; // signal a buffer overflow
+		return (_FDEV_ERR);
 	}
+	SPIx.tx_buf[SPIx.tx_buf_head] = c;
+	return (XIO_OK);
+/*
+	advance(SPIx.tx_buf_tail, SPI_TX_BUFFER_SIZE-1);
 	if (SPIx.tx_buf_head != SPIx.tx_buf_tail) {	// buffer is not full
 		SPIx.tx_buf[SPIx.tx_buf_head] = c;		// write char to buffer
 	} else { 									// buffer-full - toss the incoming character
@@ -214,6 +222,7 @@ int xio_putc_spi(const char c, FILE *stream)
 		return (_FDEV_ERR);
 	}
 	return (XIO_OK);
+*/
 }
 
 /*
@@ -224,17 +233,9 @@ int xio_putc_spi(const char c, FILE *stream)
  */
 int xio_getc_spi(FILE *stream)
 {
-//	xioSpi *dx = ((xioDev *)stream->udata)->x;	// cache SPI device struct pointer
-
-	// handle the RX buffer empty case
-	if (SPIx.rx_buf_head == SPIx.rx_buf_tail) {	// RX buffer empty
-		return(_FDEV_ERR);
-	}
-	// handle the case where the RX buffer has data
-	if (--(SPIx.rx_buf_tail) == 0) {				// advance RX tail (RXQ read ptr)
-		SPIx.rx_buf_tail = SPI_RX_BUFFER_SIZE-1;	// -1 is OBOE avoidance
-	}
-	return(SPIx.rx_buf[SPIx.rx_buf_tail]);			// return that char from RX buf
+	if (SPIx.rx_buf_head == SPIx.rx_buf_tail) {	return(_FDEV_ERR);}	// RX buffer empty
+	advance(SPIx.rx_buf_tail, SPI_RX_BUFFER_SIZE-1);
+	return(SPIx.rx_buf[SPIx.rx_buf_tail]);
 }
 
 /* 

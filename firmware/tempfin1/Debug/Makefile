@@ -38,10 +38,9 @@ SUBDIRS :=  \
 C_SRCS +=  \
 ../kinen_core.c \
 ../kinen_slave_328p.c \
-../print.c \
+../main.c \
 ../report.c \
 ../system.c \
-../tempfin1.c \
 ../util.c \
 ../xio/xio.c \
 ../xio/xio_signals.c \
@@ -58,10 +57,9 @@ ASM_SRCS +=
 OBJS +=  \
 kinen_core.o \
 kinen_slave_328p.o \
-print.o \
+main.o \
 report.o \
 system.o \
-tempfin1.o \
 util.o \
 xio/xio.o \
 xio/xio_signals.o \
@@ -72,10 +70,9 @@ xio/xio_usart.o
 OBJS_AS_ARGS +=  \
 kinen_core.o \
 kinen_slave_328p.o \
-print.o \
+main.o \
 report.o \
 system.o \
-tempfin1.o \
 util.o \
 xio/xio.o \
 xio/xio_signals.o \
@@ -86,10 +83,9 @@ xio/xio_usart.o
 C_DEPS +=  \
 kinen_core.d \
 kinen_slave_328p.d \
-print.d \
+main.d \
 report.d \
 system.d \
-tempfin1.d \
 util.d \
 xio/xio.d \
 xio/xio_signals.d \
@@ -100,10 +96,9 @@ xio/xio_usart.d
 C_DEPS_AS_ARGS +=  \
 kinen_core.d \
 kinen_slave_328p.d \
-print.d \
+main.d \
 report.d \
 system.d \
-tempfin1.d \
 util.d \
 xio/xio.d \
 xio/xio_signals.d \
@@ -120,8 +115,6 @@ ADDITIONAL_DEPENDENCIES:=
 OUTPUT_FILE_DEP:= ./makedep.mk
 
 # AVR32/GNU C Compiler
-
-
 
 
 

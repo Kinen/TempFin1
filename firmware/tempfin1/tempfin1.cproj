@@ -77,10 +77,7 @@
     <Compile Include="kinen_slave_328p.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="print.c">
-      <SubType>compile</SubType>
-    </Compile>
-    <Compile Include="print.h">
+    <Compile Include="main.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="report.c">
@@ -93,9 +90,6 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="system.h">
-      <SubType>compile</SubType>
-    </Compile>
-    <Compile Include="tempfin1.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="tempfin1.h">

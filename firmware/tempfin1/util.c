@@ -29,7 +29,7 @@
  *
  *	"A lot of people talk about standard deviation but what is a standard deviant?"
  */
-
+/*+++++++++++++++++++++
 double std_dev(double a[], uint8_t n, double *mean) 
 {
 	if(n == 0) { return (0);}
@@ -43,7 +43,7 @@ double std_dev(double a[], uint8_t n, double *mean)
 	double variance = (sq_sum / n) - square(*mean);
 	return sqrt(variance);
 }
-
++++++++++++++++++++*/
 /* Slightly faster (*) multi-value min and max functions
  * 	min3() - return minimum of 3 numbers
  * 	min4() - return minimum of 4 numbers

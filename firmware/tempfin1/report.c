@@ -26,7 +26,7 @@
 #include "xio/xio.h"
 
 /*** Strings and string arrays in program memory ***/
-
+/*++++++++++++++++++
 static const char initialized[] PROGMEM = "\nDevice Initialized\n"; 
 
 static const char msg_scode0[] PROGMEM = "";
@@ -41,14 +41,14 @@ static const char msg_hstate1[] PROGMEM = "  Shutdown";
 static const char msg_hstate2[] PROGMEM = "  Heating";
 static const char msg_hstate3[] PROGMEM = "  REGULATED";
 static PGM_P const msg_hstate[] PROGMEM = { msg_hstate0, msg_hstate1, msg_hstate2, msg_hstate3 };
-
++++++++++++++++++*/
 /*** Display routines ***/
 
 void rpt_initialized()
 {
 	printf_P(PSTR("\nDevice Initialized\n"));
 }
-
+/*+++++++++++++++++++
 void rpt_readout()
 {
 	printf_P(PSTR("Temp:%1.3f  "), 		sensor.temperature);
@@ -66,3 +66,4 @@ void rpt_readout()
 	printf_P(PSTR("\n")); 
 }
 
++++++++++++++++*/

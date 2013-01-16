@@ -6,13 +6,11 @@ kinen_core.c
 
 kinen_slave_328p.c
 
-print.c
+main.c
 
 report.c
 
 system.c
-
-tempfin1.c
 
 util.c
 

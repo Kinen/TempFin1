@@ -1,0 +1,14 @@
+*.elf
+*.pyc
+*.o
+*.map
+*.lss
+*.map
+*.d
+*.aws
+*.aps
+*.atsln
+*.atsuo
+*.cproj
+*.eep
+.DS_Store

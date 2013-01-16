@@ -1,5 +1,6 @@
 /*
- * tempfin1.c - Kinen temperature controller example
+ * main.c - Kinen temperature controller example
+ *
  * Part of Kinen project
  * Based on Kinen Motion Control System 
  *
@@ -35,7 +36,7 @@
 // local functions
 
 static void _controller(void);
-static double _sensor_sample(uint8_t adc_channel);
+//static double _sensor_sample(uint8_t adc_channel);
 static void _unit_tests(void);
 
 // Had to move the struct definitions and declarations to .h file for reporting purposes
@@ -56,13 +57,13 @@ int main(void)
 	kinen_init();				// do this third
 
 	// device level inits
-	adc_init(ADC_CHANNEL);
-	pwm_init();
-	tick_init();
+//	adc_init(ADC_CHANNEL);
+//	pwm_init();
+//	tick_init();
 	led_init();
 
 	// application level inits
-	heater_init();				// setup the heater module and subordinate functions
+//	heater_init();				// setup the heater module and subordinate functions
 	sei(); 						// enable interrupts
 	rpt_initialized();			// send initalization string
 
@@ -79,7 +80,7 @@ static void _unit_tests(void)
 {
 	XIO_UNIT_TESTS				// uncomment __XIO_UNIT_TESTs in xio.h to enable these unit tests
 	TF1_UNIT_TESTS				// uncomment __TF1_UNIT_TESTs in tempfin1.h to enable unit tests
-	heater_on(160);				// turn heater on for testing
+//	heater_on(160);				// turn heater on for testing
 }
 
 /**** PWM Port Functions ****
@@ -102,8 +103,7 @@ static void _unit_tests(void)
 #define	DISPATCH(func) if (func == SC_EAGAIN) return; 
 static void _controller()
 {
-//	DISPATCH(kinen_callback());		// intercept low-level communication events
-	DISPATCH(tick_callback());		// regular interval timer clock handler (ticks)
+//	DISPATCH(tick_callback());		// regular interval timer clock handler (ticks)
 }
 
 /**** Heater Functions ****/
@@ -116,7 +116,7 @@ static void _controller()
  *	heater_init() sets default values that may be overwritten via Kinen communications. 
  *	heater_on() sets initial values used regardless of any changes made to settings.
  */
-
+/*+++++++++++++
 void heater_init()
 { 
 	// initialize heater, start PID and PWM
@@ -236,14 +236,14 @@ void heater_callback()
 		}
 	}
 }
-
++++++++++++++++++++++*/
 /**** Heater PID Functions ****/
 /*
  * pid_init() - initialize PID with default values
  * pid_reset() - reset PID values to cold start
  * pid_calc() - derived from: http://www.embeddedheaven.com/pid-control-algorithm-c-language.htm
  */
-
+/*++++++++++++++++++++++++++
 void pid_init() 
 {
 	memset(&pid, 0, sizeof(struct PIDstruct));
@@ -283,7 +283,7 @@ double pid_calculate(double setpoint,double temperature)
 
 	return pid.output;
 }
-
+++++++++++++++*/
 /**** Temperature Sensor and Functions ****/
 /*
  * sensor_init()	 		- initialize temperature sensor
@@ -295,7 +295,7 @@ double pid_calculate(double setpoint,double temperature)
  * sensor_get_code()		- return latest sensor code
  * sensor_callback() 		- perform sensor sampling / reading
  */
-
+/*++++++++++++++++++++++
 void sensor_init()
 {
 	memset(&sensor, 0, sizeof(Sensor));
@@ -334,7 +334,7 @@ double sensor_get_temperature()
 		return (LESS_THAN_ZERO);	// an impossible temperature value
 	}
 }
-
+++++++++++++++++*/
 /*
  * sensor_callback() - perform tick-timer sensor functions
  *
@@ -346,7 +346,7 @@ double sensor_get_temperature()
  *	loop. Each sampling interval must be requested explicitly by calling 
  *	sensor_start_sample(). It does not free-run.
  */
-
+/*++++++++++++++++++
 void sensor_callback()
 {
 	// cases where you don't execute the callback:
@@ -389,6 +389,7 @@ void sensor_callback()
 		sensor.code = SENSOR_ERROR_NO_POWER;
 	}
 }
+++++++++++++++++*/
 
 /*
  * _sensor_sample() - take a sample and reject samples showing excessive variance
@@ -420,7 +421,7 @@ void sensor_callback()
  *
  *		temp = (adc_value * 1.456355556) - -120.7135972
  */
-
+/*+++++++++++++++++++++++
 static inline double _sensor_sample(uint8_t adc_channel)
 {
 #ifdef __TEST
@@ -432,6 +433,7 @@ static inline double _sensor_sample(uint8_t adc_channel)
 	return (((double)adc_read() * SENSOR_SLOPE) + SENSOR_OFFSET);
 #endif
 }
+++++++++++++++++*/
 
 /**** ADC - Analog to Digital Converter for thermocouple reader ****/
 /*
@@ -442,6 +444,7 @@ static inline double _sensor_sample(uint8_t adc_channel)
  *	I need to fund out why this is happening and stop it.
  *	In the mean time there is a do-while loop in the read function.
  */
+ /*++++++++++++++++++++++
 void adc_init(uint8_t channel)
 {
 	PRR &= ~PRADC_bm;					// Enable the ADC in the power reduction register (system.h)
@@ -462,6 +465,7 @@ uint16_t adc_read()
 	} while (ADC == 0);
 	return (ADC);
 }
+++++++++++++++++*/
 
 /**** PWM - Pulse Width Modulation Functions ****/
 /*
@@ -471,6 +475,7 @@ uint16_t adc_read()
  *	Mode: 8 bit Fast PWM Fast w/OCR2A setting PWM freq (TOP value)
  *		  and OCR2B setting the duty cycle as a fraction of OCR2A seeting
  */
+ /*+++++++++++++++++++++++
 void pwm_init(void)
 {
 	DDRD |= PWM_OUTB;					// set PWM bit to output
@@ -496,13 +501,14 @@ void pwm_off(void)
 {
 	pwm_on(0,0);
 }
+++++++++++++++++*/
 
 /*
  * pwm_set_freq() - set PWM channel frequency
  *
  *	At current settings the range is from about 500 Hz to about 6000 Hz  
  */
-
+/*++++++++++++++++
 uint8_t pwm_set_freq(double freq)
 {
 	device.pwm_freq = F_CPU / PWM_PRESCALE / freq;
@@ -515,6 +521,7 @@ uint8_t pwm_set_freq(double freq)
 	}
 	return (SC_OK);
 }
++++++++++++++++*/
 
 /*
  * pwm_set_duty() - set PWM channel duty cycle 
@@ -528,6 +535,7 @@ uint8_t pwm_set_freq(double freq)
  *	Since I can't seem to get the output pin to work in non-inverted mode
  *	it's done in software in this routine.
  */
+/*++++++++++++++++
 
 uint8_t pwm_set_duty(double duty)
 {
@@ -541,6 +549,7 @@ uint8_t pwm_set_duty(double duty)
 	OCR2A = (uint8_t)device.pwm_freq;
 	return (SC_OK);
 }
++++++++++++++++*/
 
 /**** Tick - Tick tock - Regular Interval Timer Clock Functions ****
  * tick_init() 	  - initialize RIT timers and data
@@ -550,7 +559,7 @@ uint8_t pwm_set_duty(double duty)
  * tick_100ms()	  - tasks that run every 100 ms
  * tick_1sec()	  - tasks that run every 100 ms
  */
-
+/*+++++++++++++++++++++
 void tick_init(void)
 {
 	PRR &= ~PRTIM0_bm;				// Enable Timer0 in the power reduction register (system.h)
@@ -608,6 +617,7 @@ void tick_1sec(void)			// 1 second callout
 {
 //	led_toggle();
 }
++++++++++++++++*/
 
 /**** LED Functions ****
  * led_init()
@@ -642,13 +652,13 @@ void led_toggle(void)
 }
 
 
-
 /******************************************************************************
  * TEMPERATURE FIN UNIT TESTS
  ******************************************************************************/
 
 #ifdef __TF1_UNIT_TESTS
 
+/*
 #define SETPOINT 200
 
 static void _pid_test(void);
@@ -724,6 +734,7 @@ static void _pwm_test()
 
 // exception cases
 }
+*/
 
 #endif // __UNIT_TESTS
 
