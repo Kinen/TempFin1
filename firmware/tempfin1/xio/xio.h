@@ -104,8 +104,13 @@ enum xioDev {			// TYPE:	DEVICE:
 #define XIO_DEV_SPI_COUNT 		1 				// # of SPI devices
 #define XIO_DEV_SPI_OFFSET		XIO_DEV_USART_COUNT	// offset for computing indicies
 
-//#define XIO_DEV_FILE_COUNT		1				// # of FILE devices
+//#define XIO_DEV_FILE_COUNT		1			// # of FILE devices
 //#define XIO_DEV_FILE_OFFSET		(XIO_DEV_USART_COUNT + XIO_DEV_SPI_COUNT) // index into FILES
+
+// Buffer sizing
+#define buffer_t uint_fast8_t					// fast, but limits buffer to 255 char max
+#define RX_BUFFER_SIZE (buffer_t)64				// BUFFER_T can be 8 bits
+#define TX_BUFFER_SIZE (buffer_t)64				// BUFFER_T can be 8 bits
 
 /******************************************************************************
  * Device structures
@@ -120,7 +125,7 @@ enum xioDev {			// TYPE:	DEVICE:
  ******************************************************************************/
 // NOTE" "FILE *" is another way of saying "struct __file *"
 
-#define CONTROL_T uint16_t
+#define flags_t uint16_t
 
 typedef struct xioDEVICE {							// common device struct (one per dev)
 	// references and self references
@@ -129,12 +134,12 @@ typedef struct xioDEVICE {							// common device struct (one per dev)
 	void *x;								// extended device struct binding (static)
 
 	// function bindings
-	FILE *(*x_open)(const uint8_t dev, const char *addr, const CONTROL_T flags);
-	int (*x_ctrl)(struct xioDEVICE *d, const CONTROL_T flags);		// set device control flags
+	FILE *(*x_open)(const uint8_t dev, const char *addr, const flags_t flags);
+	int (*x_ctrl)(struct xioDEVICE *d, const flags_t flags);		// set device control flags
 	int (*x_gets)(struct xioDEVICE *d, char *buf, const int size);	// non-blocking line reader
 	int (*x_getc)(FILE *);					// read char (stdio compatible)
 	int (*x_putc)(char, FILE *);			// write char (stdio compatible)
-	void (*fc_func)(struct xioDEVICE *d);	// flow control callback function
+	void (*x_flow)(struct xioDEVICE *d);	// flow control callback function
 
 	// device configuration flags
 	uint8_t flag_block;
@@ -155,14 +160,14 @@ typedef struct xioDEVICE {							// common device struct (one per dev)
 	uint8_t flag_eol;						// end of line (message) detected
 	uint8_t flag_eof;						// end of file detected
 	char *buf;								// text buffer binding (can be dynamic)
-} xioDev;
+} xioDev_t;
 
-typedef FILE *(*x_open)(const uint8_t dev, const char *addr, const CONTROL_T flags);
-typedef int (*x_ctrl)(xioDev *d, const CONTROL_T flags);
-typedef int (*x_gets)(xioDev *d, char *buf, const int size);
-typedef int (*x_getc)(FILE *);
-typedef int (*x_putc)(char, FILE *);
-typedef void (*fc_func)(xioDev *d);
+typedef FILE *(*x_open_t)(const uint8_t dev, const char *addr, const flags_t flags);
+typedef int (*x_ctrl_t)(xioDev_t *d, const flags_t flags);
+typedef int (*x_gets_t)(xioDev_t *d, char *buf, const int size);
+typedef int (*x_getc_t)(FILE *);
+typedef int (*x_putc_t)(char, FILE *);
+typedef void (*x_flow_t)(xioDev_t *d);
 
 /*************************************************************************
  *	Sub-Includes and static allocations
@@ -174,10 +179,10 @@ typedef void (*fc_func)(xioDev *d);
 #include "xio_signals.h"
 
 // Static structure allocations
-xioDev 		ds[XIO_DEV_COUNT];			// allocate top-level dev structs
-xioUsart 	us[XIO_DEV_USART_COUNT];	// USART extended IO structs
-xioSpi 		sp[XIO_DEV_SPI_COUNT];		// SPI extended IO structs
-//xioFile 	fs[XIO_DEV_FILE_COUNT];		// FILE extended IO structs
+xioDev_t 	ds[XIO_DEV_COUNT];			// allocate top-level dev structs
+xioUsart_t 	us[XIO_DEV_USART_COUNT];	// USART extended IO structs
+xioSpi_t 	sp[XIO_DEV_SPI_COUNT];		// SPI extended IO structs
+//xioFile_t fs[XIO_DEV_FILE_COUNT];		// FILE extended IO structs
 xioSignals	sig;						// signal flags
 extern struct controllerSingleton tg;	// needed by init() for default source
 
@@ -186,22 +191,27 @@ extern struct controllerSingleton tg;	// needed by init() for default source
  *************************************************************************/
 // Advance RX or TX head or tail. Buffers count down, so advance is a decrement.
 // The zero condition is the wrap that sets the index back to the top.
-#define advance(buf,len) { if ((--(buf)) == 0) buf = len-1;}
+#define advance_buffer(buf,len) { if ((--(buf)) == 0) buf = len-1;}
 
 // public functions (virtual class) 
 void xio_init(void);
-FILE *xio_open(const uint8_t dev, const char *addr, const CONTROL_T flags);
-int xio_ctrl(const uint8_t dev, const CONTROL_T flags);
+FILE *xio_open(const uint8_t dev, const char *addr, const flags_t flags);
+int xio_ctrl(const uint8_t dev, const flags_t flags);
 int xio_gets(const uint8_t dev, char *buf, const int size);
 int xio_getc(const uint8_t dev);
 int xio_putc(const uint8_t dev, const char c);
 int xio_set_baud(const uint8_t dev, const uint8_t baud_rate);
 
 // generic functions (private, but at virtual level)
-int xio_ctrl_generic(xioDev *d, const CONTROL_T flags);
-void xio_open_generic(uint8_t dev, x_open x_open, x_ctrl x_ctrl, x_gets x_gets, x_getc x_getc, x_putc x_putc, fc_func fc_func);
-void xio_fc_null(xioDev *d);			// NULL flow control callback
-//void xio_fc_usart(xioDev *d);			// XON/XOFF flow control callback
+void xio_init_device(uint8_t dev, x_open_t x_open_t, x_ctrl_t x_ctrl, x_gets_t x_gets, x_getc_t x_getc, x_putc_t x_putc, x_flow_t x_flow);
+int xio_ctrl_device(xioDev_t *d, const flags_t flags);
+void xio_fc_null(xioDev_t *d);			// NULL flow control callback
+//void xio_fc_usart(xioDev_t *d);		// XON/XOFF flow control callback
+
+int xio_read_rx_buffer(xioSpi_t *dx);
+int xio_write_rx_buffer(xioSpi_t *dx, char c);
+int xio_read_tx_buffer(xioSpi_t *dx);
+int xio_write_tx_buffer(xioSpi_t *dx, char c);
 
 // std devices
 void xio_init_stdio(void);				// set std devs & do startup prompt
@@ -216,7 +226,7 @@ void xio_set_stderr(const uint8_t dev);
  * xio control flag values
  *
  * if using 32 bits must cast 1 to uint32_t for bit evaluations to work correctly
- * #define XIO_BLOCK	((uint32_t)1<<1)		// 32 bit example. Change CONTROL_T to uint32_t
+ * #define XIO_BLOCK	((uint32_t)1<<1)		// 32 bit example. Change flags_t to uint32_t
  */
 
 #define XIO_BLOCK		((uint16_t)1<<0)		// enable blocking reads
@@ -269,6 +279,8 @@ enum xioSignals {
 #define ESC (char)0x1B		// ^[ - ESC(ape)
 #define DEL (char)0x7F		//  DEL(ete)
 
+#define Q_EMPTY (char)0xFF	// signal no character
+
 /* Signal character mappings */
 
 #define CHAR_RESET CAN
@@ -297,11 +309,16 @@ enum xioCodes {
 	XIO_FILE_SIZE_EXCEEDED, // maximum file size exceeded
 	XIO_NO_SUCH_DEVICE,		// illegal or unavailable device
 	XIO_BUFFER_EMPTY,		// more of a statement of fact than an error code
+	XIO_BUFFER_FULL,
 	XIO_BUFFER_FULL_FATAL,
-	XIO_BUFFER_FULL_NON_FATAL,
-	XIO_INITIALIZING		// system initializing, not ready for use
+	XIO_INITIALIZING,		// system initializing, not ready for use
+	XIO_ERROR_16,			// reserved
+	XIO_ERROR_17,			// reserved
+	XIO_ERROR_18,			// reserved
+	XIO_ERROR_19			// NOTE: XIO codes align to here
 };
 #define XIO_ERRNO_MAX XIO_BUFFER_FULL_NON_FATAL
+
 
 
 /******************************************************************************

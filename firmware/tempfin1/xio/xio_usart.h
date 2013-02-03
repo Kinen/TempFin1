@@ -21,9 +21,9 @@
  ******************************************************************************/
 
 // Buffer sizing
-#define BUFFER_T uint_fast8_t					// fast, but limits buffer to 255 char max
-#define RX_BUFFER_SIZE (BUFFER_T)64				// BUFFER_T can be 8 bits
-#define TX_BUFFER_SIZE (BUFFER_T)64				// BUFFER_T can be 8 bits
+//#define BUFFER_T uint_fast8_t					// fast, but limits buffer to 255 char max
+//#define RX_BUFFER_SIZE (BUFFER_T)64				// BUFFER_T can be 8 bits
+//#define TX_BUFFER_SIZE (BUFFER_T)64				// BUFFER_T can be 8 bits
 
 #define USART_FLAGS (XIO_BLOCK |  XIO_ECHO | XIO_XOFF | XIO_LINEMODE )
 
@@ -36,23 +36,23 @@
  *	     or a max of 254 characters usable
  */
 typedef struct xioUSART {
-	volatile BUFFER_T rx_buf_tail;			// RX buffer read index
-	volatile BUFFER_T rx_buf_head;			// RX buffer write index (written by ISR)
-	volatile BUFFER_T tx_buf_tail;			// TX buffer read index  (written by ISR)
-	volatile BUFFER_T tx_buf_head;			// TX buffer write index
+	volatile buffer_t rx_buf_tail;			// RX buffer read index
+	volatile buffer_t rx_buf_head;			// RX buffer write index (written by ISR)
+	volatile buffer_t tx_buf_tail;			// TX buffer read index  (written by ISR)
+	volatile buffer_t tx_buf_head;			// TX buffer write index
 
 	volatile char rx_buf[RX_BUFFER_SIZE];	// (written by ISR)
 	volatile char tx_buf[TX_BUFFER_SIZE];
-} xioUsart;
+} xioUsart_t;
 
 /******************************************************************************
  * USART CLASS AND DEVICE FUNCTION PROTOTYPES AND ALIASES
  ******************************************************************************/
 
 void xio_init_usart(void);
-FILE *xio_open_usart(const uint8_t dev, const char *addr, const CONTROL_T flags);
-void xio_set_baud_usart(xioUsart *dx, const uint32_t baud);
-int xio_gets_usart(xioDev *d, char *buf, const int size);
+FILE *xio_open_usart(const uint8_t dev, const char *addr, const flags_t flags);
+void xio_set_baud_usart(xioUsart_t *dx, const uint32_t baud);
+int xio_gets_usart(xioDev_t *d, char *buf, const int size);
 int xio_getc_usart(FILE *stream);
 int xio_putc_usart(const char c, FILE *stream);
 void xio_queue_RX_char_usart(const uint8_t dev, const char c);

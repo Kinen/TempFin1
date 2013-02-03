@@ -17,7 +17,7 @@
 #ifndef tempfin1_h
 #define tempfin1_h
 
-#define BUILD_NUMBER 		002.03			// SPI development
+#define BUILD_NUMBER 		003.01			// SPI development
 #define VERSION_NUMBER		0.1				// firmware major version
 #define HARDWARE_VERSION	0.1				// board revision number
 

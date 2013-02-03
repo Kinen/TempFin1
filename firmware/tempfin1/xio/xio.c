@@ -109,31 +109,35 @@ void xio_init()
 }
 
 /*
- * xio_open_generic() - generic (and partial) open function for any device
+ * xio_init_device() - generic initialization function for any device
  *
- *	This binds the main fucntions and sets up the stdio FILE structure
- *	udata is used to point back to the device struct so it can be gotten 
- *	from getc() and putc() functions. 
+ *	Binds the main fucntions and sets up the stdio FILE structure. udata is used 
+ *	to point back to the device struct so it can be gotten from getc() and putc() functions. 
  *
- *	Requires device specific open() to be run afterward to complete the setup
+ *	Requires device open() to be run prior to using the device
  */
-void xio_open_generic(uint8_t dev, x_open x_open, x_ctrl x_ctrl, x_gets x_gets, x_getc x_getc, x_putc x_putc, fc_func fc_func)
+void xio_init_device(uint8_t dev, x_open_t x_open, 
+								  x_ctrl_t x_ctrl, 
+								  x_gets_t x_gets, 
+								  x_getc_t x_getc, 
+								  x_putc_t x_putc, 
+								  x_flow_t x_flow)
 {
-	xioDev *d = &ds[dev];
-	memset (d, 0, sizeof(xioDev));
+	xioDev_t *d = &ds[dev];
+	memset (d, 0, sizeof(xioDev_t));
 	d->dev = dev;
 
 	// bind functions to device structure
 	d->x_open = x_open;
 	d->x_ctrl = x_ctrl;
 	d->x_gets = x_gets;
-	d->x_getc = x_getc;		// you don't need to bind these unless you are going to use them directly
-	d->x_putc = x_putc;		// they are bound into the fdev stream struct
-	d->fc_func = fc_func;	// flow control function or null FC function
+	d->x_getc = x_getc;	// you don't need to bind getc & putc unless you are going to use them directly
+	d->x_putc = x_putc;	// they are bound into the fdev stream struct
+	d->x_flow = x_flow;
 
 	// setup the stdio FILE struct and link udata back to the device struct
 	fdev_setup_stream(&d->file, x_putc, x_getc, _FDEV_SETUP_RW);
-	fdev_set_udata(&d->file, d);		// reference self for udata 
+	fdev_set_udata(&d->file, d);		// reference yourself for udata 
 }
 
 /* 
@@ -147,7 +151,7 @@ void xio_open_generic(uint8_t dev, x_open x_open, x_ctrl x_ctrl, x_gets x_gets, 
  * 	if (dev < XIO_DEV_COUNT) blah blah blah
  *	else  return (_FDEV_ERR);	// XIO_NO_SUCH_DEVICE
  */
-FILE *xio_open(uint8_t dev, const char *addr, CONTROL_T flags)
+FILE *xio_open(uint8_t dev, const char *addr, flags_t flags)
 {
 	return (ds[dev].x_open(dev, addr, flags));
 }
@@ -171,15 +175,15 @@ int xio_putc(const uint8_t dev, const char c)
  * xio_ctrl() - PUBLIC set control flags (top-level XIO_DEV access)
  * xio_ctrl_generic() - PRIVATE but generic set-control-flags
  */
-int xio_ctrl(const uint8_t dev, const CONTROL_T flags)
+int xio_ctrl(const uint8_t dev, const flags_t flags)
 {
-	return (xio_ctrl_generic(&ds[dev], flags));
+	return (xio_ctrl_device(&ds[dev], flags));
 }
 
 #define SETFLAG(t,f) if ((flags & t) != 0) { d->f = true; }
 #define CLRFLAG(t,f) if ((flags & t) != 0) { d->f = false; }
 
-int xio_ctrl_generic(xioDev *d, const CONTROL_T flags)
+int xio_ctrl_device(xioDev_t *d, const flags_t flags)
 {
 	SETFLAG(XIO_BLOCK,		flag_block);
 	CLRFLAG(XIO_NOBLOCK,	flag_block);
@@ -204,7 +208,7 @@ int xio_ctrl_generic(xioDev *d, const CONTROL_T flags)
  */
 int xio_set_baud(const uint8_t dev, const uint8_t baud)
 {
-	xioUsart *dx = (xioUsart *)&us[dev - XIO_DEV_USART_OFFSET];
+	xioUsart_t *dx = (xioUsart_t *)&us[dev - XIO_DEV_USART_OFFSET];
 	xio_set_baud_usart(dx, baud);
 	return (XIO_OK);
 }
@@ -212,7 +216,7 @@ int xio_set_baud(const uint8_t dev, const uint8_t baud)
 /*
  * xio_fc_null() - flow control null function
  */
-void xio_fc_null(xioDev *d)
+void xio_fc_null(xioDev_t *d)
 {
 	return;
 }
@@ -227,27 +231,89 @@ void xio_set_stdin(const uint8_t dev)  { stdin  = &ds[dev].file; }
 void xio_set_stdout(const uint8_t dev) { stdout = &ds[dev].file; }
 void xio_set_stderr(const uint8_t dev) { stderr = &ds[dev].file; }
 
+/* 
+ * Buffer read and write functions
+ * 
+ * READ: Read from the tail. Read sequence is:
+ *	- test buffer and return Q_empty if empty
+ *	- read char from buffer
+ *	- advance the tail (post-advance)
+ *	- return C with tail left pointing to next char to be read (or no data)
+ *
+ * WRITES: Write to the head. Write sequence is:
+ *	- advance a temporary head (pre-advance)
+ *	- test buffer and return Q_empty if empty
+ *	- commit head advance to structure
+ *	- return status with head left pointing to latest char written
+ *
+ *	You can make these blocking routines by calling them in an infinite
+ *	while() waiting for something other than Q_EMPTY to be returned.
+ */
+
+int xio_read_rx_buffer(xioSpi_t *dx) 
+{
+	if (dx->rx_buf_head == dx->rx_buf_tail) { return (_FDEV_ERR);}
+	char c = dx->rx_buf[dx->rx_buf_tail];
+	if ((--(dx->rx_buf_tail)) == 0) { dx->rx_buf_tail = RX_BUFFER_SIZE-1;}
+	return (c);
+}
+
+int xio_write_rx_buffer(xioSpi_t *dx, char c) 
+{
+	buffer_t next_rx_buf_head = dx->rx_buf_head-1;
+	if (next_rx_buf_head == 0) { next_rx_buf_head = RX_BUFFER_SIZE-1;}
+	if (next_rx_buf_head == dx->rx_buf_tail) { return (_FDEV_ERR);}
+	dx->rx_buf[next_rx_buf_head] = c;
+	dx->rx_buf_head = next_rx_buf_head;
+	return (XIO_OK);
+}
+
+int xio_read_tx_buffer(xioSpi_t *dx) 
+{
+	if (dx->tx_buf_head == dx->tx_buf_tail) { return (_FDEV_ERR);}
+	char c = dx->tx_buf[dx->tx_buf_tail];
+	if ((--(dx->tx_buf_tail)) == 0) { dx->tx_buf_tail = TX_BUFFER_SIZE-1;}
+	return (c);
+}
+
+int xio_write_tx_buffer(xioSpi_t *dx, char c) 
+{
+	buffer_t next_tx_buf_head = dx->tx_buf_head-1;
+	if (next_tx_buf_head == 0) { next_tx_buf_head = TX_BUFFER_SIZE-1;}
+	if (next_tx_buf_head == dx->tx_buf_tail) { return (_FDEV_ERR);}
+	dx->tx_buf[next_tx_buf_head] = c;
+	dx->tx_buf_head = next_tx_buf_head;
+	return (XIO_OK);
+}
 
 /******************************************************************************
  * XIO UNIT TESTS
  ******************************************************************************/
 
 #ifdef __XIO_UNIT_TESTS
-static void _spi_loopback_test();
+static void _transmit_test(uint8_t dev);
+static void _loopback_test(uint8_t dev);
 //static void _pgm_read_test();
 
 void xio_unit_tests()
 {
-	_spi_loopback_test();	// never returns
+	_transmit_test(XIO_DEV_USART);		// never returns
+	_loopback_test(XIO_DEV_USART);		// never returns
+	_loopback_test(XIO_DEV_SPI);		// never returns
 }
 
-void _spi_loopback_test()	// never returns
+static void _transmit_test(uint8_t dev)		// never returns
 {
-	char c = ETX;
+	while (true) { xio_putc(dev, '5');}
+}
+
+static void _loopback_test(uint8_t dev)		// never returns
+{
+	char c = '5';
 
 	while (true) {
-		if ((c = xio_getc(XIO_DEV_SPI)) != _FDEV_ERR) {
-			xio_putc(XIO_DEV_SPI, c);
+		if ((c = xio_getc(dev)) != _FDEV_ERR) {
+			xio_putc(dev, c);
 		}
 	}
 }
