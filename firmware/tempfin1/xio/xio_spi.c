@@ -66,8 +66,6 @@
 
 #include "xio.h"						// includes for all devices are in here
 
-// statics
-static int _gets_helper(xioDev_t *d, xioSpi_t *dx);
 
 /******************************************************************************
  * SPI CONFIGURATION RECORDS
@@ -94,7 +92,7 @@ static struct cfgSPI const cfgSpi[] PROGMEM = {
 		xio_gets_spi,
 		xio_getc_spi,
 		xio_putc_spi,
-		xio_fc_null,
+		xio_flow_null,
 
 //		(1<<SPIE | 1<<SPE)						// mode 0 operation / slave
 		(1<<SPIE | 1<<SPE | 1<<CPOL | 1<<CPHA),	// mode 3 operation / slave

@@ -27,75 +27,46 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#include <stdio.h>						// precursor for xio.h
-#include <stdbool.h>					// true and false
-#include <string.h>						// for memset
-#include <avr/pgmspace.h>				// precursor for xio.h.
+#include <stdio.h>					// precursor for xio.h
+#include <stdbool.h>				// true and false
 #include <avr/interrupt.h>
-#include <avr/sleep.h>					// needed for blocking character writes
+#include "xio.h"					// includes for all devices are in here
 
-#include "xio.h"						// includes for all devices are in here
+// allocate and initialize USART structs
+xioUsartRX_t urx = { USART_RX_BUFFER_SIZE-1,1,1 };
+xioUsartTX_t utx = { USART_TX_BUFFER_SIZE-1,1,1 };
 
-/******************************************************************************
- * USART CONFIGURATION RECORDS
- ******************************************************************************/
-
-struct cfgUSART {		
-		// function and callback bindings - see xio.h for typedefs
-		x_open_t x_open;			// binding for device open function
-		x_ctrl_t x_ctrl;			// ctrl function
-		x_gets_t x_gets;			// get string function
-		x_getc_t x_getc;			// stdio compatible getc function
-		x_putc_t x_putc;			// stdio compatible putc function
-		x_flow_t x_flow;			// flow control callback
-
-		// initialization values
-		uint32_t baud; 			// baud rate as a long
-		uint8_t ucsra_init;		// initialization value for usart control/status register A
-		uint8_t ucsrb_init;		// initialization value for usart control/status register B
-};
-
-static struct cfgUSART const cfgUsart[] PROGMEM = {
-	{
+xioDev_t us = {
+		XIO_DEV_USART,
 		xio_open_usart,
 		xio_ctrl_device,
 		xio_gets_usart,
 		xio_getc_usart,
 		xio_putc_usart,
-		xio_fc_null,
-
-		115200,					// baud rate
-		0,						// turns baud doubler off
-		( 1<<RXCIE0 | 1<<TXEN0 | 1<<RXEN0)  // enable recv interrupt, TX and RX
-	}
+		xio_flow_null,
+		(xioBuf_t *)&urx,
+		(xioBuf_t *)&utx,
+		(void *)NULL,				// extended device struct optional binding
+		// unecessary to initialize from here out...
+//		{NULL,0,0,0,0,NULL,NULL,0},	// stdio FILE struct - see stdio.h if this breaks
+//		0,0,0,0,0,0,				// flags
+//		0,0,0,						// private working data
+//		NULL						// buffer binding
 };
 
 // Fast accessors
-#define USART ds[XIO_DEV_USART]							// device struct accessor
-#define USARTx us[XIO_DEV_USART - XIO_DEV_USART_OFFSET]	// usart extended struct accessor
-
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
-
-//static int _gets_helper(xioDev_t *d, xioUsart_t *dx);
+#define USARTrx ds[XIO_DEV_USART]->rx
+#define USARTtx ds[XIO_DEV_USART]->tx
 
 /*
  *	xio_init_usart() - general purpose USART initialization (shared)
  *
  *	This generic init() requires open() to be performed to complete the device init
  */
-void xio_init_usart(void)
+xioDev_t *xio_init_usart(uint8_t dev)
 {
-	for (uint8_t i=0; i<XIO_DEV_USART_COUNT; i++) {
-		xio_init_device(XIO_DEV_USART_OFFSET + i,
-					   (x_open_t)pgm_read_word(&cfgUsart[i].x_open),
-					   (x_ctrl_t)pgm_read_word(&cfgUsart[i].x_ctrl),
-					   (x_gets_t)pgm_read_word(&cfgUsart[i].x_gets),
-					   (x_getc_t)pgm_read_word(&cfgUsart[i].x_getc),
-					   (x_putc_t)pgm_read_word(&cfgUsart[i].x_putc),
-					   (x_flow_t)pgm_read_word(&cfgUsart[i].x_flow));
-	}
+	us.dev = dev;			// overwite the structure initialization value in case it was wrong
+	return (&us);
 }
 
 /*
@@ -106,30 +77,27 @@ void xio_init_usart(void)
  */
 FILE *xio_open_usart(const uint8_t dev, const char *addr, const flags_t flags)
 {
-	// setup pointers and references
-	xioDev_t *d = &ds[dev];							// main device struct pointer
-	uint8_t idx = dev - XIO_DEV_USART_OFFSET;		// index into USART extended structures
-	d->x = (xioUsart_t *)&us[idx];					// bind extended struct to device
-	xioUsart_t *dx = (xioUsart_t *)d->x;			// dx is a convenience / efficiency
-	memset (dx, 0, sizeof(xioUsart_t));				// zro out the extended struct
-
-	// setup internals
-	xio_ctrl_device(d, flags);						// setup control flags	
-	dx->rx_buf_head = 1;							// can't use location 0 in circular buffer
-	dx->rx_buf_tail = 1;
-	dx->tx_buf_head = 1;
-	dx->tx_buf_tail = 1;
+	xioDev_t *d = ds[dev];						// convenience device struct pointer
+	xio_reset_working_flags(d);
+	xio_ctrl_device(d, flags);					// setup control flags
+	d->rx->head = 1;							// can't use location 0 in circular buffer
+	d->rx->tail = 1;
+	d->tx->head = 1;
+	d->tx->tail = 1;
 
 	// setup the hardware
 	PRR &= ~PRUSART0_bm;		// Enable the USART in the power reduction register (system.h)
-	UCSR0A = (uint8_t)pgm_read_byte(&cfgUsart[idx].ucsra_init);
-	UCSR0B = (uint8_t)pgm_read_byte(&cfgUsart[idx].ucsrb_init);
-	xio_set_baud_usart(dx,pgm_read_dword(&cfgUsart[idx].baud));
+	UCSR0A = USART_BAUD_DOUBLER;
+	UCSR0B = USART_ENABLE_FLAGS;
+	xio_set_baud_usart(d, USART_BAUD_RATE);
 
+	// setup stdio stream structure
+	fdev_setup_stream(&d->file, d->x_putc, d->x_getc, _FDEV_SETUP_RW);
+	fdev_set_udata(&d->file, d);		// reference yourself for udata 
 	return (&d->file);								// return stdio FILE reference
 }
 
-void xio_set_baud_usart(xioUsart_t *dx, const uint32_t baud)
+void xio_set_baud_usart(xioDev_t *d, const uint32_t baud)
 {
 	UBRR0 = (F_CPU / (8 * baud)) - 1;
 	UCSR0A &= ~(1<<U2X0);		// baud doubler off
@@ -141,14 +109,20 @@ void xio_set_baud_usart(xioUsart_t *dx, const uint32_t baud)
  */
 int xio_putc_usart(const char c, FILE *stream)
 {
-	UCSR0B |= (1<<UDRIE0); 								// enable TX interrupts - will keep firing
-	return (xio_write_tx_buffer(((xioDev_t *)stream->udata)->x,c));
+//	UCSR0B |= (1<<UDRIE0); 	// enable TX interrupts - they will keep firing
+//	return (xio_write_buffer(((xioDev_t *)stream->udata)->tx, c));
+
+	int status = xio_write_buffer(((xioDev_t *)stream->udata)->tx, c);
+	if (status != _FDEV_ERR) {
+		UCSR0B |= (1<<UDRIE0); 	// enable TX interrupts - they will keep firing
+	}
+	return (status);
 }
 
 ISR(USART_UDRE_vect)
 {
-	char c = xio_read_tx_buffer(&USARTx);
-	if (c == _FDEV_ERR) UCSR0B &= ~(1<<UDRIE0); else UDR0 = c;
+	int c = xio_read_buffer(USARTtx);
+	if (c == _FDEV_ERR) UCSR0B &= ~(1<<UDRIE0); else UDR0 = (char)c;
 }
 
 /*
@@ -171,12 +145,12 @@ ISR(USART_UDRE_vect)
  */
 ISR(USART_RX_vect) 
 { 
-	xio_write_rx_buffer(&USARTx, UDR0);
+	xio_write_buffer(USARTrx, UDR0);
 }
 
 int xio_getc_usart(FILE *stream)
 {
-	char c = xio_read_rx_buffer(((xioDev_t *)stream->udata)->x);
+	char c = xio_read_buffer(((xioDev_t *)stream->udata)->rx);
 
 //	xioDev_t *d = (xioDev_t *)stream->udata;		// get device struct pointer
 //	d->x_flow(d);										// run the flow control function (USB only)
@@ -203,7 +177,7 @@ int xio_getc_usart(FILE *stream)
  */
 int xio_gets_usart(xioDev_t *d, char *buf, const int size)
 {
-	xioUsart_t *dx =(xioUsart_t *)d->x;			// USART pointer
+//	xioUsart_t *dx =(xioUsart_t *)d->x;			// USART pointer
 	char c_out;
 
 	// first time thru initializations
@@ -218,7 +192,7 @@ int xio_gets_usart(xioDev_t *d, char *buf, const int size)
 			d->buf[d->size] = NUL;				// string termination preserves latest char
 			return (XIO_BUFFER_FULL);
 		}
-		if ((c_out = xio_read_rx_buffer(dx)) == _FDEV_ERR) { return (XIO_EAGAIN);}
+		if ((c_out = xio_read_buffer(d->rx)) == _FDEV_ERR) { return (XIO_EAGAIN);}
 		if (c_out == LF) {
 			d->buf[(d->len)++] = NUL;
 			d->flag_in_line = false;			// clear in-line state (reset)
@@ -227,62 +201,6 @@ int xio_gets_usart(xioDev_t *d, char *buf, const int size)
 		d->buf[(d->len)++] = c_out;				// write character to buffer
 	}
 }
-
-/*
-{
-	xioUsart_t *dx =(xioUsart_t *)d->x;			// USART pointer
-
-	if (d->flag_in_line == false) {				// first time thru initializations
-		d->flag_in_line = true;					// yes, we are busy getting a line
-		d->len = 0;								// zero buffer
-		d->buf = buf;
-		d->size = size;
-		d->signal = XIO_SIG_OK;					// reset signal register
-	}
-	while (true) {
-		switch (_gets_helper(d,dx)) {
-			case (XIO_BUFFER_EMPTY):			// empty condition
-				return (XIO_EAGAIN);
-			case (XIO_BUFFER_FULL):	// overrun err
-				return (XIO_BUFFER_FULL);
-			case (XIO_EOL): 					// got complete line
-				return (XIO_OK);
-			case (XIO_EAGAIN):					// loop for next character
-				break;
-		}
-	}
-	return (XIO_OK);
-}
-
-static int _gets_helper(xioDev_t *d, xioUsart_t *dx)
-{
-	char c = NUL;
-
-	if (dx->rx_buf_head == dx->rx_buf_tail) {	// RX ISR buffer empty
-		return(XIO_BUFFER_EMPTY);				// stop reading
-	}
-	if (--(dx->rx_buf_tail) == 0) {				// advance RX tail (RX q read ptr)
-		dx->rx_buf_tail = RX_BUFFER_SIZE-1;		// -1 avoids off-by-one (OBOE)
-	}
-//	d->fc_func(d);								// run the flow control callback
-	c = dx->rx_buf[dx->rx_buf_tail];			// get char from RX Q
-	if (d->flag_echo) d->x_putc(c, stdout);		// conditional echo regardless of character
-
-	if (d->len >= d->size) {					// handle buffer overruns
-		d->buf[d->size] = NUL;					// terminate line (d->size is zero based)
-//		d->signal = XIO_SIG_EOL;
-		return (XIO_BUFFER_FULL);
-	}
-	if ((c == CR) || (c == LF)) {				// handle CR, LF termination
-		d->buf[(d->len)++] = NUL;
-		d->signal = XIO_SIG_EOL;
-		d->flag_in_line = false;				// clear in-line state (reset)
-		return (XIO_EOL);						// return for end-of-line
-	}
-	d->buf[(d->len)++] = c;						// write character to buffer
-	return (XIO_EAGAIN);
-}
-*/
 
 /* Fakeout routines for testing
  *

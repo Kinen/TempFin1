@@ -92,25 +92,27 @@
 // Unused devices are commented out. All this needs to line up.
 
 enum xioDev {			// TYPE:	DEVICE:
-	XIO_DEV_USART,		// USART	USART device
+	XIO_DEV_USART = 0,	// USART	USART device
 	XIO_DEV_SPI,		// SPI		SPI device
+//	XIO_DEV_PGM,		// FILE		Program memory files
 	XIO_DEV_COUNT		// total device count (must be last entry)
 };
 // If your change these ^, check these v
 
-#define XIO_DEV_USART_COUNT 	1 				// # of USART devices
-#define XIO_DEV_USART_OFFSET	0				// offset for computing indices
+//#define XIO_DEV_USART_COUNT 	1 				// # of USART devices
+//#define XIO_DEV_USART_OFFSET	0				// offset for computing indices
 
-#define XIO_DEV_SPI_COUNT 		1 				// # of SPI devices
-#define XIO_DEV_SPI_OFFSET		XIO_DEV_USART_COUNT	// offset for computing indicies
+//#define XIO_DEV_SPI_COUNT 		1 				// # of SPI devices
+//#define XIO_DEV_SPI_OFFSET		XIO_DEV_USART_COUNT	// offset for computing indicies
 
 //#define XIO_DEV_FILE_COUNT		1			// # of FILE devices
 //#define XIO_DEV_FILE_OFFSET		(XIO_DEV_USART_COUNT + XIO_DEV_SPI_COUNT) // index into FILES
 
 // Buffer sizing
 #define buffer_t uint_fast8_t					// fast, but limits buffer to 255 char max
-#define RX_BUFFER_SIZE (buffer_t)64				// BUFFER_T can be 8 bits
-#define TX_BUFFER_SIZE (buffer_t)64				// BUFFER_T can be 8 bits
+//#define RX_BUFFER_SIZE (buffer_t)64
+//#define TX_BUFFER_SIZE (buffer_t)64
+#define BUFFER_SIZE (buffer_t)32
 
 /******************************************************************************
  * Device structures
@@ -127,42 +129,49 @@ enum xioDev {			// TYPE:	DEVICE:
 
 #define flags_t uint16_t
 
-typedef struct xioDEVICE {							// common device struct (one per dev)
-	// references and self references
-	uint8_t dev;							// self referential device number
-	FILE file;								// stdio FILE stream structure
-	void *x;								// extended device struct binding (static)
+typedef struct xioBuffer {
+	buffer_t size;					// size of buffer
+	volatile buffer_t tail;			// buffer read index
+	volatile buffer_t head;			// buffer write index (written by ISR)
+	char buf[BUFFER_SIZE];
+} xioBuf_t;
 
-	// function bindings
+typedef struct xioDEVICE {					// common device struct (one per dev)
+	uint8_t dev;							// self referential device number
 	FILE *(*x_open)(const uint8_t dev, const char *addr, const flags_t flags);
-	int (*x_ctrl)(struct xioDEVICE *d, const flags_t flags);		// set device control flags
+//	int (*x_close)(struct xioDEVICE *d);
+	int (*x_ctrl)(struct xioDEVICE *d, const flags_t flags);
 	int (*x_gets)(struct xioDEVICE *d, char *buf, const int size);	// non-blocking line reader
 	int (*x_getc)(FILE *);					// read char (stdio compatible)
 	int (*x_putc)(char, FILE *);			// write char (stdio compatible)
 	void (*x_flow)(struct xioDEVICE *d);	// flow control callback function
+	xioBuf_t *rx;							// RX buffer / control structure
+	xioBuf_t *tx;							// TX buffer / control structure
+	void *x;								// extended device struct binding
+	FILE file;								// stdio FILE stream structure
 
-	// device configuration flags
+	// device flags (some are not used in the 328 implementation)
 	uint8_t flag_block;
 	uint8_t flag_echo;
 	uint8_t flag_linemode;
-
-	// these flags are not used in the 328 implementation
 //	uint8_t flag_crlf;						// expand LFs to CR + LF on TX
 //	uint8_t flag_ignorecr;					// ignore CRs on RX
 //	uint8_t flag_ignorelf;					// ignore LFs on RX
 //	uint8_t flag_xoff;						// xon/xoff enabled
+	uint8_t flag_in_line;					// used as a state variable for line reads
+	uint8_t flag_eol;						// end of line (message) detected
+	uint8_t flag_eof;						// end of file detected
 
 	// private working data and runtime flags
 	int size;								// text buffer length (dynamic)
 	uint8_t len;							// chars read so far (buf array index)
-	uint8_t signal;							// signal value
-	uint8_t flag_in_line;					// used as a state variable for line reads
-	uint8_t flag_eol;						// end of line (message) detected
-	uint8_t flag_eof;						// end of file detected
+//	uint8_t signal;							// signal value
 	char *buf;								// text buffer binding (can be dynamic)
+	
 } xioDev_t;
 
 typedef FILE *(*x_open_t)(const uint8_t dev, const char *addr, const flags_t flags);
+//typedef int (*x_close_t)(xioDev_t *d);
 typedef int (*x_ctrl_t)(xioDev_t *d, const flags_t flags);
 typedef int (*x_gets_t)(xioDev_t *d, char *buf, const int size);
 typedef int (*x_getc_t)(FILE *);
@@ -179,12 +188,16 @@ typedef void (*x_flow_t)(xioDev_t *d);
 #include "xio_signals.h"
 
 // Static structure allocations
-xioDev_t 	ds[XIO_DEV_COUNT];			// allocate top-level dev structs
-xioUsart_t 	us[XIO_DEV_USART_COUNT];	// USART extended IO structs
-xioSpi_t 	sp[XIO_DEV_SPI_COUNT];		// SPI extended IO structs
+xioDev_t  ds_old[XIO_DEV_COUNT];			// allocate top-level dev structs
+xioDev_t *ds[XIO_DEV_COUNT];
+//xioUsart_t 	us[XIO_DEV_USART_COUNT];	// USART extended IO structs
+//xioSpi_t 	sp[XIO_DEV_SPI_COUNT];		// SPI extended IO structs
 //xioFile_t fs[XIO_DEV_FILE_COUNT];		// FILE extended IO structs
-xioSignals	sig;						// signal flags
-extern struct controllerSingleton tg;	// needed by init() for default source
+//xioSignals	sig;						// signal flags
+
+//extern struct controllerSingleton tg;	// needed by init() for default source
+
+
 
 /*************************************************************************
  *	Function Prototypes and Macros
@@ -204,14 +217,19 @@ int xio_set_baud(const uint8_t dev, const uint8_t baud_rate);
 
 // generic functions (private, but at virtual level)
 void xio_init_device(uint8_t dev, x_open_t x_open_t, x_ctrl_t x_ctrl, x_gets_t x_gets, x_getc_t x_getc, x_putc_t x_putc, x_flow_t x_flow);
+void xio_reset_working_flags(xioDev_t *d);
 int xio_ctrl_device(xioDev_t *d, const flags_t flags);
-void xio_fc_null(xioDev_t *d);			// NULL flow control callback
-//void xio_fc_usart(xioDev_t *d);		// XON/XOFF flow control callback
+void xio_flow_null(xioDev_t *d);		// NULL flow control callback
+//void xio_flow_usart(xioDev_t *d);		// XON/XOFF flow control callback
 
-int xio_read_rx_buffer(xioSpi_t *dx);
-int xio_write_rx_buffer(xioSpi_t *dx, char c);
-int xio_read_tx_buffer(xioSpi_t *dx);
-int xio_write_tx_buffer(xioSpi_t *dx, char c);
+
+int xio_read_buffer(xioBuf_t *b);
+int xio_write_buffer(xioBuf_t *b, char c);
+
+//int xio_read_rx_buffer(xioSpi_t *dx);
+//int xio_write_rx_buffer(xioSpi_t *dx, char c);
+//int xio_read_tx_buffer(xioSpi_t *dx);
+//int xio_write_tx_buffer(xioSpi_t *dx, char c);
 
 // std devices
 void xio_init_stdio(void);				// set std devs & do startup prompt

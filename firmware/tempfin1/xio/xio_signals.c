@@ -44,10 +44,10 @@
 
 void sig_init()
 {
-	sig.sig_reset = false;
+//	sig.sig_reset = false;
 }
 
 inline void sig_reset()					// reset
 {
-	sig.sig_reset = true;
+//	sig.sig_reset = true;
 }

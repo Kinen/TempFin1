@@ -48,6 +48,7 @@ void rpt_initialized()
 {
 	printf_P(PSTR("\nDevice Initialized\n"));
 }
+
 /*+++++++++++++++++++
 void rpt_readout()
 {

@@ -67,19 +67,6 @@
  * Lower layers are called using the device structure pointer xioDev *d
  * The stdio compatible functions use pointers to the stdio FILE structs.
  */
-/* ---- Efficiency Hack ----
- *
- * Device and extended structs are usually referenced via their pointers. E.g:
- *
- *	  xioDev *d = &ds[dev];						// setup device struct ptr
- *    xioUsart *dx = (xioUsart *)d->x; 			// setup USART struct ptr
- *
- * In some cases a static reference is used for time critical regions like raw 
- * character IO. This is measurably faster even under -Os. For example:
- *
- *    #define USB (ds[dev])						// USB device struct accessor
- *    #define USBu ((xioUsart *)(ds[dev].x))	// USB extended struct accessor
- */
 
 #include <string.h>					// for memset()
 #include <stdbool.h>
@@ -90,22 +77,31 @@
 
 /*
  * xio_init() - initialize entire xio sub-system
+ * xio_reset_working_flags()
  */
 void xio_init()
 {
-	// setup device types
-	xio_init_usart();
-	xio_init_spi();
-//	xio_init_file();
+	// device constructors and registration in device control array
+
+	ds[XIO_DEV_USART] = xio_init_usart(XIO_DEV_USART);
+	ds[XIO_DEV_SPI]   = xio_init_usart(XIO_DEV_SPI);
+//	ds[XIO_DEV_FILE]  = xio_init_usart(XIO_DEV_FILE);
 
 	// open individual devices (file device opens occur at time-of-use)
-	xio_open(XIO_DEV_USART, 0,USART_FLAGS);
-	xio_open(XIO_DEV_SPI, 0, SPI_FLAGS);
+	xio_open(XIO_DEV_USART, NULL, USART_FLAGS);
+	xio_open(XIO_DEV_SPI, NULL, SPI_FLAGS);
 
 	// setup std devices for printf/fprintf to work
 	xio_set_stdin(XIO_DEV_USART);
 	xio_set_stdout(XIO_DEV_USART);
 	xio_set_stderr(XIO_DEV_SPI);
+}
+
+void xio_reset_working_flags(xioDev_t *d)
+{
+	d->flag_in_line = 0;
+	d->flag_eol = 0;
+	d->flag_eof = 0;
 }
 
 /*
@@ -116,6 +112,7 @@ void xio_init()
  *
  *	Requires device open() to be run prior to using the device
  */
+/*
 void xio_init_device(uint8_t dev, x_open_t x_open, 
 								  x_ctrl_t x_ctrl, 
 								  x_gets_t x_gets, 
@@ -139,7 +136,7 @@ void xio_init_device(uint8_t dev, x_open_t x_open,
 	fdev_setup_stream(&d->file, x_putc, x_getc, _FDEV_SETUP_RW);
 	fdev_set_udata(&d->file, d);		// reference yourself for udata 
 }
-
+*/
 /* 
  * PUBLIC ENTRY POINTS - acces the functions via the XIO_DEV number
  * xio_open() - open function 
@@ -153,22 +150,22 @@ void xio_init_device(uint8_t dev, x_open_t x_open,
  */
 FILE *xio_open(uint8_t dev, const char *addr, flags_t flags)
 {
-	return (ds[dev].x_open(dev, addr, flags));
+	return (ds[dev]->x_open(dev, addr, flags));
 }
 
 int xio_gets(const uint8_t dev, char *buf, const int size) 
 {
-	return (ds[dev].x_gets(&ds[dev], buf, size));
+	return (ds[dev]->x_gets(ds[dev], buf, size));
 }
 
 int xio_getc(const uint8_t dev) 
 { 
-	return (ds[dev].x_getc(&ds[dev].file)); 
+	return (ds[dev]->x_getc(&(ds[dev]->file))); 
 }
 
 int xio_putc(const uint8_t dev, const char c)
 {
-	return (ds[dev].x_putc(c, &ds[dev].file)); 
+	return (ds[dev]->x_putc(c, &(ds[dev]->file))); 
 }
 
 /*
@@ -177,7 +174,7 @@ int xio_putc(const uint8_t dev, const char c)
  */
 int xio_ctrl(const uint8_t dev, const flags_t flags)
 {
-	return (xio_ctrl_device(&ds[dev], flags));
+	return (xio_ctrl_device(ds[dev], flags));
 }
 
 #define SETFLAG(t,f) if ((flags & t) != 0) { d->f = true; }
@@ -208,15 +205,15 @@ int xio_ctrl_device(xioDev_t *d, const flags_t flags)
  */
 int xio_set_baud(const uint8_t dev, const uint8_t baud)
 {
-	xioUsart_t *dx = (xioUsart_t *)&us[dev - XIO_DEV_USART_OFFSET];
-	xio_set_baud_usart(dx, baud);
+//	xioDev_t *d = ds[dev];
+	xio_set_baud_usart(ds[dev], baud);
 	return (XIO_OK);
 }
 
 /*
- * xio_fc_null() - flow control null function
+ * xio_flow_null() - flow control null function
  */
-void xio_fc_null(xioDev_t *d)
+void xio_flow_null(xioDev_t *d)
 {
 	return;
 }
@@ -227,12 +224,12 @@ void xio_fc_null(xioDev_t *d)
  * xio_set_stderr() - set stderr from device number
  */
 
-void xio_set_stdin(const uint8_t dev)  { stdin  = &ds[dev].file; }
-void xio_set_stdout(const uint8_t dev) { stdout = &ds[dev].file; }
-void xio_set_stderr(const uint8_t dev) { stderr = &ds[dev].file; }
+void xio_set_stdin(const uint8_t dev)  { stdin  = &(ds[dev]->file); }
+void xio_set_stdout(const uint8_t dev) { stdout = &(ds[dev]->file); }
+void xio_set_stderr(const uint8_t dev) { stderr = &(ds[dev]->file); }
 
 /* 
- * Buffer read and write functions
+ * Buffer read and write primitives
  * 
  * READ: Read from the tail. Read sequence is:
  *	- test buffer and return Q_empty if empty
@@ -249,6 +246,27 @@ void xio_set_stderr(const uint8_t dev) { stderr = &ds[dev].file; }
  *	You can make these blocking routines by calling them in an infinite
  *	while() waiting for something other than Q_EMPTY to be returned.
  */
+
+
+int xio_read_buffer(xioBuf_t *b) 
+{
+	if (b->head == b->tail) { return (_FDEV_ERR);}
+	char c = b->buf[b->tail];
+	if ((--(b->tail)) == 0) { b->tail = b->size;}
+	return (c);
+}
+
+int xio_write_buffer(xioBuf_t *b, char c) 
+{
+	buffer_t next_head = b->head-1;
+	if (next_head == 0) { next_head = b->size;}
+	if (next_head == b->tail) { return (_FDEV_ERR);}
+	b->buf[next_head] = c;
+	b->head = next_head;
+	return (XIO_OK);
+}
+
+/*
 
 int xio_read_rx_buffer(xioSpi_t *dx) 
 {
@@ -285,6 +303,7 @@ int xio_write_tx_buffer(xioSpi_t *dx, char c)
 	dx->tx_buf_head = next_tx_buf_head;
 	return (XIO_OK);
 }
+*/
 
 /******************************************************************************
  * XIO UNIT TESTS
@@ -297,7 +316,7 @@ static void _loopback_test(uint8_t dev);
 
 void xio_unit_tests()
 {
-	_transmit_test(XIO_DEV_USART);		// never returns
+//	_transmit_test(XIO_DEV_USART);		// never returns
 	_loopback_test(XIO_DEV_USART);		// never returns
 	_loopback_test(XIO_DEV_SPI);		// never returns
 }
@@ -309,12 +328,17 @@ static void _transmit_test(uint8_t dev)		// never returns
 
 static void _loopback_test(uint8_t dev)		// never returns
 {
-	char c = '5';
+	char c;
 
 	while (true) {
-		if ((c = xio_getc(dev)) != _FDEV_ERR) {
+		c = xio_getc(dev);
+		if (c != (char)_FDEV_ERR) {
 			xio_putc(dev, c);
 		}
+
+//		if ((c = xio_getc(dev)) != _FDEV_ERR) {
+//			xio_putc(dev, c);
+//		}
 	}
 }
 

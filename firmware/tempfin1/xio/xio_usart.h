@@ -17,41 +17,40 @@
 #define xio_usart_h
 
 /******************************************************************************
- * USART DEVICE CONFIGS (applied during device-specific inits)
+ * USART DEVICE CONFIGS AND STRUCTURES
  ******************************************************************************/
 
-// Buffer sizing
-//#define BUFFER_T uint_fast8_t					// fast, but limits buffer to 255 char max
-//#define RX_BUFFER_SIZE (BUFFER_T)64				// BUFFER_T can be 8 bits
-//#define TX_BUFFER_SIZE (BUFFER_T)64				// BUFFER_T can be 8 bits
+#define USART_BAUD_RATE		115200
+#define USART_BAUD_DOUBLER	0									// turns baud doubler off
+#define USART_ENABLE_FLAGS	( 1<<RXCIE0 | 1<<TXEN0 | 1<<RXEN0)  // enable recv interrupt, TX and RX
 
+#define ubuf_t uint_fast8_t					// fast, but limits buffer to 255 char max
+#define USART_RX_BUFFER_SIZE (ubuf_t)32
+#define USART_TX_BUFFER_SIZE (ubuf_t)32
 #define USART_FLAGS (XIO_BLOCK |  XIO_ECHO | XIO_XOFF | XIO_LINEMODE )
 
-/******************************************************************************
- * STRUCTURES 
- ******************************************************************************/
-/* 
- * USART extended control structure 
- * Note: As defined this struct won't do buffers larger than 256 chars - 
- *	     or a max of 254 characters usable
- */
-typedef struct xioUSART {
-	volatile buffer_t rx_buf_tail;			// RX buffer read index
-	volatile buffer_t rx_buf_head;			// RX buffer write index (written by ISR)
-	volatile buffer_t tx_buf_tail;			// TX buffer read index  (written by ISR)
-	volatile buffer_t tx_buf_head;			// TX buffer write index
+// these structs must be the same as xioBuf. Only the buf array size can be different.
+typedef struct xioUsartRX {
+	buffer_t size;					// initialize to USART_RX_BUFFER_SIZE-1
+	volatile buffer_t tail;			// read index
+	volatile buffer_t head;			// write index (written by ISR)
+	char buf[USART_RX_BUFFER_SIZE];
+} xioUsartRX_t;
 
-	volatile char rx_buf[RX_BUFFER_SIZE];	// (written by ISR)
-	volatile char tx_buf[TX_BUFFER_SIZE];
-} xioUsart_t;
+typedef struct xioUsartTX {
+	buffer_t size;					// initialize to USART_RX_BUFFER_SIZE-1
+	volatile buffer_t tail;			// read index
+	volatile buffer_t head;			// write index (written by ISR)
+	char buf[USART_TX_BUFFER_SIZE];
+} xioUsartTX_t;
 
 /******************************************************************************
  * USART CLASS AND DEVICE FUNCTION PROTOTYPES AND ALIASES
  ******************************************************************************/
 
-void xio_init_usart(void);
+xioDev_t *xio_init_usart(uint8_t dev);
 FILE *xio_open_usart(const uint8_t dev, const char *addr, const flags_t flags);
-void xio_set_baud_usart(xioUsart_t *dx, const uint32_t baud);
+void xio_set_baud_usart(xioDev_t *d, const uint32_t baud);
 int xio_gets_usart(xioDev_t *d, char *buf, const int size);
 int xio_getc_usart(FILE *stream);
 int xio_putc_usart(const char c, FILE *stream);

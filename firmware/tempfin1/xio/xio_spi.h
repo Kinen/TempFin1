@@ -36,6 +36,7 @@
  * Note: As defined this struct won't do buffers larger than 256 chars - 
  *	     or a max of 254 characters usable
  */
+ /*
 typedef struct xioSPI {
 	volatile buffer_t rx_buf_tail;			// RX buffer read index
 	volatile buffer_t rx_buf_head;			// RX buffer write index (written by ISR)
@@ -45,7 +46,7 @@ typedef struct xioSPI {
 	volatile char rx_buf[RX_BUFFER_SIZE];	// (may be written by an ISR)
 	volatile char tx_buf[TX_BUFFER_SIZE];	// (may be written by an ISR)
 } xioSpi_t;
-
+*/
 /******************************************************************************
  * SPI FUNCTION PROTOTYPES AND ALIASES
  ******************************************************************************/
