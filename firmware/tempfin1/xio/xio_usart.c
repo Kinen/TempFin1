@@ -33,25 +33,21 @@
 #include "xio.h"					// includes for all devices are in here
 
 // allocate and initialize USART structs
-xioUsartRX_t urx = { USART_RX_BUFFER_SIZE-1,1,1 };
-xioUsartTX_t utx = { USART_TX_BUFFER_SIZE-1,1,1 };
+xioUsartRX_t usart_rx = { USART_RX_BUFFER_SIZE-1,1,1 };
+xioUsartTX_t usart_tx = { USART_TX_BUFFER_SIZE-1,1,1 };
 
-xioDev_t us = {
+xioDev_t usart0 = {
 		XIO_DEV_USART,
 		xio_open_usart,
 		xio_ctrl_device,
-		xio_gets_usart,
+		xio_gets_device,
 		xio_getc_usart,
 		xio_putc_usart,
-		xio_flow_null,
-		(xioBuf_t *)&urx,
-		(xioBuf_t *)&utx,
+		xio_null,
+		(xioBuf_t *)&usart_rx,
+		(xioBuf_t *)&usart_tx,
 		(void *)NULL,				// extended device struct optional binding
-		// unecessary to initialize from here out...
-//		{NULL,0,0,0,0,NULL,NULL,0},	// stdio FILE struct - see stdio.h if this breaks
-//		0,0,0,0,0,0,				// flags
-//		0,0,0,						// private working data
-//		NULL						// buffer binding
+		// unnecessary to initialize the rest of the struct 
 };
 
 // Fast accessors
@@ -60,13 +56,12 @@ xioDev_t us = {
 
 /*
  *	xio_init_usart() - general purpose USART initialization (shared)
- *
- *	This generic init() requires open() to be performed to complete the device init
+ *					   requires open() to be performed to complete the device init
  */
 xioDev_t *xio_init_usart(uint8_t dev)
 {
-	us.dev = dev;			// overwite the structure initialization value in case it was wrong
-	return (&us);
+	usart0.dev = dev;	// overwite the structure initialization value in case it was wrong
+	return (&usart0);
 }
 
 /*
@@ -109,20 +104,19 @@ void xio_set_baud_usart(xioDev_t *d, const uint32_t baud)
  */
 int xio_putc_usart(const char c, FILE *stream)
 {
-//	UCSR0B |= (1<<UDRIE0); 	// enable TX interrupts - they will keep firing
-//	return (xio_write_buffer(((xioDev_t *)stream->udata)->tx, c));
-
 	int status = xio_write_buffer(((xioDev_t *)stream->udata)->tx, c);
-	if (status != _FDEV_ERR) {
-		UCSR0B |= (1<<UDRIE0); 	// enable TX interrupts - they will keep firing
-	}
+	UCSR0B |= (1<<UDRIE0); 	// enable TX interrupts - they will keep firing
 	return (status);
 }
 
 ISR(USART_UDRE_vect)
 {
 	int c = xio_read_buffer(USARTtx);
-	if (c == _FDEV_ERR) UCSR0B &= ~(1<<UDRIE0); else UDR0 = (char)c;
+	if (c == _FDEV_ERR) {
+		UCSR0B &= ~(1<<UDRIE0); 
+	} else {
+		UDR0 = (char)c;
+	}
 }
 
 /*
@@ -151,18 +145,15 @@ ISR(USART_RX_vect)
 int xio_getc_usart(FILE *stream)
 {
 	char c = xio_read_buffer(((xioDev_t *)stream->udata)->rx);
-
-//	xioDev_t *d = (xioDev_t *)stream->udata;		// get device struct pointer
-//	d->x_flow(d);										// run the flow control function (USB only)
-//	if (d->flag_echo) d->x_putc(c, stdout);				// conditional echo regardless of character
-//	if ((c == CR) || (c == LF)) { if (d->flag_linemode) { return('\n');}}
-
+	xioDev_t *d = (xioDev_t *)stream->udata;		// get device struct pointer
+	d->x_flow(d);									// run the flow control function (USB only)
+	if (d->flag_echo) d->x_putc(c, stdout);			// conditional echo regardless of character
+	if ((c == CR) || (c == LF)) { if (d->flag_linemode) { return('\n');}}
 	return (c);
 }
 
 /* 
  *	xio_gets_usart() - read a complete line from the usart device
- * _gets_helper() 	 - non-blocking character getter for gets
  *
  *	Retains line context across calls - so it can be called multiple times.
  *	Reads as many characters as it can until any of the following is true:
@@ -175,9 +166,9 @@ int xio_getc_usart(FILE *stream)
  *	Note: LINEMODE flag in device struct is ignored. It's ALWAYS LINEMODE here.
  *	Note: This function assumes ignore CR and ignore LF handled upstream before the RX buffer
  */
+/*
 int xio_gets_usart(xioDev_t *d, char *buf, const int size)
 {
-//	xioUsart_t *dx =(xioUsart_t *)d->x;			// USART pointer
 	char c_out;
 
 	// first time thru initializations
@@ -201,7 +192,7 @@ int xio_gets_usart(xioDev_t *d, char *buf, const int size)
 		d->buf[(d->len)++] = c_out;				// write character to buffer
 	}
 }
-
+*/
 /* Fakeout routines for testing
  *
  *	xio_queue_RX_string_usart() - fake ISR to put a string in the RX buffer

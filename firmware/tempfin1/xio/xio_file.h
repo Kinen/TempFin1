@@ -92,8 +92,8 @@ typedef struct xioFILE {
  * FILE DEVICE FUNCTION PROTOTYPES
  */
 void xio_init_file(void);
-FILE *xio_open_file(const uint8_t dev, const char *addr, const CONTROL_T flags);
-int xio_gets_pgm(xioDev *d, char *buf, const int size);			// read string from program memory
+FILE *xio_open_file(const uint8_t dev, const char *addr, const flags_t flags);
+int xio_gets_pgm(xioDev_t *d, char *buf, const int size);			// read string from program memory
 int xio_getc_pgm(FILE *stream);									// get a character from PROGMEM
 int xio_putc_pgm(const char c, FILE *stream);					// always returns ERROR
 

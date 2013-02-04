@@ -23,11 +23,12 @@
 #define USART_BAUD_RATE		115200
 #define USART_BAUD_DOUBLER	0									// turns baud doubler off
 #define USART_ENABLE_FLAGS	( 1<<RXCIE0 | 1<<TXEN0 | 1<<RXEN0)  // enable recv interrupt, TX and RX
+#define USART_XIO_FLAGS 	(XIO_BLOCK |  XIO_ECHO | XIO_XOFF | XIO_LINEMODE )
 
 #define ubuf_t uint_fast8_t					// fast, but limits buffer to 255 char max
 #define USART_RX_BUFFER_SIZE (ubuf_t)32
 #define USART_TX_BUFFER_SIZE (ubuf_t)32
-#define USART_FLAGS (XIO_BLOCK |  XIO_ECHO | XIO_XOFF | XIO_LINEMODE )
+
 
 // these structs must be the same as xioBuf. Only the buf array size can be different.
 typedef struct xioUsartRX {

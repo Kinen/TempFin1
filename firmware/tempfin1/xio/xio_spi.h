@@ -18,40 +18,44 @@
 #define xio_spi_h
 
 /******************************************************************************
- * SPI DEVICE CONFIGS (applied during device-specific inits)
+ * SPI DEVICE CONFIGS AND STRUCTURES
  ******************************************************************************/
 
-// Buffer sizing
-//#define spibuf_t uint_fast8_t				// fast, but limits SPI buffers to 255 char max
-//#define SPI_RX_BUFFER_SIZE (spibuf_t)64		// BUFFER_T can be 8 bits
-//#define SPI_TX_BUFFER_SIZE (spibuf_t)64		// BUFFER_T can be 8 bits
+//#define SPI_MODE		(1<<SPIE | 1<<SPE)						// mode 0 operation / slave
+#define SPI_MODE		(1<<SPIE | 1<<SPE | 1<<CPOL | 1<<CPHA)	// mode 3 operation / slave
+#define SPI_OUTBITS		(1<<DDB4)			// Set SCK, MOSI, SS to input, MISO to output
+#define SPI_XIO_FLAGS 	(XIO_BLOCK |  XIO_ECHO | XIO_LINEMODE)
 
-#define SPI_FLAGS (XIO_BLOCK |  XIO_ECHO | XIO_LINEMODE)
+#define ubuf_t uint_fast8_t					// fast, but limits buffer to 255 char max
+//#define SPI_RX_BUFFER_SIZE (ubuf_t)32
+//#define SPI_TX_BUFFER_SIZE (ubuf_t)32
+#define SPI_RX_BUFFER_SIZE (ubuf_t)BUFFER_SIZE
+#define SPI_TX_BUFFER_SIZE (ubuf_t)BUFFER_SIZE
 
-/******************************************************************************
- * STRUCTURES 
- ******************************************************************************/
-/* 
- * SPI extended control structure 
- * Note: As defined this struct won't do buffers larger than 256 chars - 
- *	     or a max of 254 characters usable
- */
- /*
-typedef struct xioSPI {
-	volatile buffer_t rx_buf_tail;			// RX buffer read index
-	volatile buffer_t rx_buf_head;			// RX buffer write index (written by ISR)
-	volatile buffer_t tx_buf_tail;			// TX buffer read index  (written by ISR)
-	volatile buffer_t tx_buf_head;			// TX buffer write index
+// these structs must be the same as xioBuf. Only the buf array size can be different.
+typedef struct xioSpiRX {
+	buffer_t size;							// initialize to SPI_RX_BUFFER_SIZE-1
+//	volatile buffer_t tail;					// read index
+//	volatile buffer_t head;					// write index (written by ISR)
+	buffer_t tail;							// read index
+	buffer_t head;							// write index (written by ISR)
+	char buf[SPI_RX_BUFFER_SIZE];
+} xioSpiRX_t;
 
-	volatile char rx_buf[RX_BUFFER_SIZE];	// (may be written by an ISR)
-	volatile char tx_buf[TX_BUFFER_SIZE];	// (may be written by an ISR)
-} xioSpi_t;
-*/
+typedef struct xioSpiTX {
+	buffer_t size;
+//	volatile buffer_t tail;
+//	volatile buffer_t head;
+	buffer_t tail;							// read index
+	buffer_t head;							// write index (written by ISR)
+	char buf[SPI_TX_BUFFER_SIZE];
+} xioSpiTX_t;
+
 /******************************************************************************
  * SPI FUNCTION PROTOTYPES AND ALIASES
  ******************************************************************************/
 
-void xio_init_spi(void);
+xioDev_t *xio_init_spi(uint8_t dev);
 FILE *xio_open_spi(const uint8_t dev, const char *addr, const flags_t flags);
 int xio_gets_spi(xioDev_t *d, char *buf, const int size);
 int xio_putc_spi(const char c, FILE *stream);

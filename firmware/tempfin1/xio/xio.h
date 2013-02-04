@@ -85,6 +85,8 @@
 
 #include "../system.h"
 
+// see other xio_.h includes below the structures and typdefs
+
 /*************************************************************************
  *	Device configurations
  *************************************************************************/
@@ -97,42 +99,31 @@ enum xioDev {			// TYPE:	DEVICE:
 //	XIO_DEV_PGM,		// FILE		Program memory files
 	XIO_DEV_COUNT		// total device count (must be last entry)
 };
-// If your change these ^, check these v
-
-//#define XIO_DEV_USART_COUNT 	1 				// # of USART devices
-//#define XIO_DEV_USART_OFFSET	0				// offset for computing indices
-
-//#define XIO_DEV_SPI_COUNT 		1 				// # of SPI devices
-//#define XIO_DEV_SPI_OFFSET		XIO_DEV_USART_COUNT	// offset for computing indicies
-
-//#define XIO_DEV_FILE_COUNT		1			// # of FILE devices
-//#define XIO_DEV_FILE_OFFSET		(XIO_DEV_USART_COUNT + XIO_DEV_SPI_COUNT) // index into FILES
-
-// Buffer sizing
-#define buffer_t uint_fast8_t					// fast, but limits buffer to 255 char max
-//#define RX_BUFFER_SIZE (buffer_t)64
-//#define TX_BUFFER_SIZE (buffer_t)64
-#define BUFFER_SIZE (buffer_t)32
 
 /******************************************************************************
  * Device structures
  *
- * Each device has 3 structs. The generic device struct is declared below.
+ * Each device has one or 2 structs. 1. The device struct declared below.
  * It embeds a stdio stream struct "FILE". The FILE struct uses the udata
  * field to back-reference the generic struct so getc & putc can get at it.
- * Lastly there's an 'x' struct which contains data specific to each dev type.
+ * Optionally a device may have an 'x' struct which contains extended data 
+ * specific to that device or device type
  *
- * The generic open() function sets up the generic struct and the FILE stream. 
- * the device opens() set up the extended struct and bind it ot the generic.
+ * NOTE" "FILE *" is another way of saying "struct __file *"
+ *
  ******************************************************************************/
-// NOTE" "FILE *" is another way of saying "struct __file *"
 
 #define flags_t uint16_t
+#define buffer_t uint_fast8_t				// fast, but limits buffer to 255 char max
+//#define BUFFER_SIZE (buffer_t)64
+#define BUFFER_SIZE 64
 
 typedef struct xioBuffer {
-	buffer_t size;					// size of buffer
-	volatile buffer_t tail;			// buffer read index
-	volatile buffer_t head;			// buffer write index (written by ISR)
+	buffer_t size;							// size of buffer
+//	volatile buffer_t tail;					// buffer read index
+//	volatile buffer_t head;					// buffer write index (written by ISR)
+	buffer_t tail;							// buffer read index
+	buffer_t head;							// buffer write index (written by ISR)
 	char buf[BUFFER_SIZE];
 } xioBuf_t;
 
@@ -165,7 +156,6 @@ typedef struct xioDEVICE {					// common device struct (one per dev)
 	// private working data and runtime flags
 	int size;								// text buffer length (dynamic)
 	uint8_t len;							// chars read so far (buf array index)
-//	uint8_t signal;							// signal value
 	char *buf;								// text buffer binding (can be dynamic)
 	
 } xioDev_t;
@@ -178,64 +168,42 @@ typedef int (*x_getc_t)(FILE *);
 typedef int (*x_putc_t)(char, FILE *);
 typedef void (*x_flow_t)(xioDev_t *d);
 
-/*************************************************************************
+/*******************************************************************************
  *	Sub-Includes and static allocations
- *************************************************************************/
-// Put all sub-includes here so only xio.h is needed elsewhere
-#include "xio_usart.h"
+ *******************************************************************************/
+// all sub-includes here so only xio.h is needed externally
 #include "xio_spi.h"
-//#include "xio_file.h"
-#include "xio_signals.h"
+#include "xio_usart.h"
+//#include "xio_file.h"					// not yet
 
-// Static structure allocations
-xioDev_t  ds_old[XIO_DEV_COUNT];			// allocate top-level dev structs
-xioDev_t *ds[XIO_DEV_COUNT];
-//xioUsart_t 	us[XIO_DEV_USART_COUNT];	// USART extended IO structs
-//xioSpi_t 	sp[XIO_DEV_SPI_COUNT];		// SPI extended IO structs
-//xioFile_t fs[XIO_DEV_FILE_COUNT];		// FILE extended IO structs
-//xioSignals	sig;						// signal flags
+xioDev_t *ds[XIO_DEV_COUNT];			// array of device structure pointers 
+extern struct controllerSingleton tg;	// needed by init() for default source
 
-//extern struct controllerSingleton tg;	// needed by init() for default source
-
-
-
-/*************************************************************************
- *	Function Prototypes and Macros
- *************************************************************************/
-// Advance RX or TX head or tail. Buffers count down, so advance is a decrement.
-// The zero condition is the wrap that sets the index back to the top.
-#define advance_buffer(buf,len) { if ((--(buf)) == 0) buf = len-1;}
+/*******************************************************************************
+ *	Function Prototypes
+ *******************************************************************************/
 
 // public functions (virtual class) 
-void xio_init(void);
 FILE *xio_open(const uint8_t dev, const char *addr, const flags_t flags);
 int xio_ctrl(const uint8_t dev, const flags_t flags);
 int xio_gets(const uint8_t dev, char *buf, const int size);
 int xio_getc(const uint8_t dev);
 int xio_putc(const uint8_t dev, const char c);
 int xio_set_baud(const uint8_t dev, const uint8_t baud_rate);
-
-// generic functions (private, but at virtual level)
-void xio_init_device(uint8_t dev, x_open_t x_open_t, x_ctrl_t x_ctrl, x_gets_t x_gets, x_getc_t x_getc, x_putc_t x_putc, x_flow_t x_flow);
-void xio_reset_working_flags(xioDev_t *d);
-int xio_ctrl_device(xioDev_t *d, const flags_t flags);
-void xio_flow_null(xioDev_t *d);		// NULL flow control callback
-//void xio_flow_usart(xioDev_t *d);		// XON/XOFF flow control callback
-
-
-int xio_read_buffer(xioBuf_t *b);
-int xio_write_buffer(xioBuf_t *b, char c);
-
-//int xio_read_rx_buffer(xioSpi_t *dx);
-//int xio_write_rx_buffer(xioSpi_t *dx, char c);
-//int xio_read_tx_buffer(xioSpi_t *dx);
-//int xio_write_tx_buffer(xioSpi_t *dx, char c);
-
-// std devices
-void xio_init_stdio(void);				// set std devs & do startup prompt
 void xio_set_stdin(const uint8_t dev);
 void xio_set_stdout(const uint8_t dev);
 void xio_set_stderr(const uint8_t dev);
+
+// private functions (excuse me sir, this is a private function)
+void xio_init(void);
+void xio_reset_working_flags(xioDev_t *d);
+void xio_null(xioDev_t *d);				// NULL callback (used for flow control)
+int xio_ctrl_device(xioDev_t *d, const flags_t flags);
+//int xio_getc_device(FILE *stream);
+//int xio_putc_device(const char c, FILE *stream);
+int xio_gets_device(xioDev_t *d, char *buf, const int size);
+int xio_read_buffer(xioBuf_t *b);
+int xio_write_buffer(xioBuf_t *b, char c);
 
 /*************************************************************************
  * SUPPORTING DEFINTIONS - SHOULD NOT NEED TO CHANGE
@@ -293,6 +261,7 @@ enum xioSignals {
 #define CR	(char)0x0D		// ^m - carriage return
 #define XON (char)0x11		// ^q - DC1, XON, resume
 #define XOFF (char)0x13		// ^s - DC3, XOFF, pause
+#define NAK (char)0x15		// ^u - Negative acknowledgement
 #define CAN (char)0x18		// ^x - Cancel, abort
 #define ESC (char)0x1B		// ^[ - ESC(ape)
 #define DEL (char)0x7F		//  DEL(ete)
