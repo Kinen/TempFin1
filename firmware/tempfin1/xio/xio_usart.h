@@ -21,27 +21,26 @@
  ******************************************************************************/
 
 #define USART_BAUD_RATE		115200
-#define USART_BAUD_DOUBLER	0									// turns baud doubler off
+#define USART_BAUD_DOUBLER	0									// 0=turns baud doubler off
 #define USART_ENABLE_FLAGS	( 1<<RXCIE0 | 1<<TXEN0 | 1<<RXEN0)  // enable recv interrupt, TX and RX
 #define USART_XIO_FLAGS 	(XIO_BLOCK |  XIO_ECHO | XIO_XOFF | XIO_LINEMODE )
 
 #define ubuf_t uint_fast8_t					// fast, but limits buffer to 255 char max
-#define USART_RX_BUFFER_SIZE (ubuf_t)32
-#define USART_TX_BUFFER_SIZE (ubuf_t)32
-
+#define USART_RX_BUFFER_SIZE (ubuf_t)16
+#define USART_TX_BUFFER_SIZE (ubuf_t)DEFAULT_BUFFER_SIZE
 
 // these structs must be the same as xioBuf. Only the buf array size can be different.
 typedef struct xioUsartRX {
 	buffer_t size;					// initialize to USART_RX_BUFFER_SIZE-1
-	volatile buffer_t tail;			// read index
-	volatile buffer_t head;			// write index (written by ISR)
+	buffer_t rd;					// read index
+	buffer_t wr;					// write index (written by ISR)
 	char buf[USART_RX_BUFFER_SIZE];
 } xioUsartRX_t;
 
 typedef struct xioUsartTX {
 	buffer_t size;					// initialize to USART_RX_BUFFER_SIZE-1
-	volatile buffer_t tail;			// read index
-	volatile buffer_t head;			// write index (written by ISR)
+	buffer_t rd;					// read index
+	buffer_t wr;					// write index (written by ISR)
 	char buf[USART_TX_BUFFER_SIZE];
 } xioUsartTX_t;
 

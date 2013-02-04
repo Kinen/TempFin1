@@ -17,8 +17,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "kinen_core.h"
-#include "kinen_slave_328p.h"
+#include "kinen.h"
 
 /*
  * kinen_init() - set up Kinen subsystems; master or slave
@@ -27,5 +26,5 @@
  */
 void kinen_init(void)
 {
-	kinen_slave_init();
+	return;
 }

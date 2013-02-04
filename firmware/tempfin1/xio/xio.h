@@ -114,17 +114,14 @@ enum xioDev {			// TYPE:	DEVICE:
  ******************************************************************************/
 
 #define flags_t uint16_t
-#define buffer_t uint_fast8_t				// fast, but limits buffer to 255 char max
-//#define BUFFER_SIZE (buffer_t)64
-#define BUFFER_SIZE 64
+#define buffer_t uint8_t					// fast, but limits buffer to 255 char max
+#define DEFAULT_BUFFER_SIZE 64				// default size unless overridded in defns
 
 typedef struct xioBuffer {
-	buffer_t size;							// size of buffer
-//	volatile buffer_t tail;					// buffer read index
-//	volatile buffer_t head;					// buffer write index (written by ISR)
-	buffer_t tail;							// buffer read index
-	buffer_t head;							// buffer write index (written by ISR)
-	char buf[BUFFER_SIZE];
+	buffer_t size;							// buffer size -1 (for wrapping)
+	buffer_t rd;							// read index
+	buffer_t wr;							// write index
+	char buf[];								// array size is set by device RX/TX definitions
 } xioBuf_t;
 
 typedef struct xioDEVICE {					// common device struct (one per dev)
@@ -136,8 +133,8 @@ typedef struct xioDEVICE {					// common device struct (one per dev)
 	int (*x_getc)(FILE *);					// read char (stdio compatible)
 	int (*x_putc)(char, FILE *);			// write char (stdio compatible)
 	void (*x_flow)(struct xioDEVICE *d);	// flow control callback function
-	xioBuf_t *rx;							// RX buffer / control structure
-	xioBuf_t *tx;							// TX buffer / control structure
+	xioBuf_t *rx;							// RX buffer struct binding
+	xioBuf_t *tx;							// TX buffer struct binding
 	void *x;								// extended device struct binding
 	FILE file;								// stdio FILE stream structure
 
@@ -145,19 +142,18 @@ typedef struct xioDEVICE {					// common device struct (one per dev)
 	uint8_t flag_block;
 	uint8_t flag_echo;
 	uint8_t flag_linemode;
+	uint8_t flag_in_line;					// used as a state variable for line reads
+	uint8_t flag_eol;						// end of line (message) detected
+	uint8_t flag_eof;						// end of file detected
 //	uint8_t flag_crlf;						// expand LFs to CR + LF on TX
 //	uint8_t flag_ignorecr;					// ignore CRs on RX
 //	uint8_t flag_ignorelf;					// ignore LFs on RX
 //	uint8_t flag_xoff;						// xon/xoff enabled
-	uint8_t flag_in_line;					// used as a state variable for line reads
-	uint8_t flag_eol;						// end of line (message) detected
-	uint8_t flag_eof;						// end of file detected
 
-	// private working data and runtime flags
+	// gets() working data
 	int size;								// text buffer length (dynamic)
 	uint8_t len;							// chars read so far (buf array index)
-	char *buf;								// text buffer binding (can be dynamic)
-	
+	char *buf;								// text buffer binding (can be dynamic)	
 } xioDev_t;
 
 typedef FILE *(*x_open_t)(const uint8_t dev, const char *addr, const flags_t flags);

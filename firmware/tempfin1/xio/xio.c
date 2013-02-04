@@ -214,32 +214,31 @@ int xio_gets_device(xioDev_t *d, char *buf, const int size)
 			d->flag_in_line = false;			// clear in-line state (reset)
 			return (XIO_OK);					// return for end-of-line
 		}
-		d->buf[(d->len)++] = c_out;				// write character to buffer
+		d->buf[d->len++] = c_out;				// write character to buffer
 	}
 }
 
 /* 
  * Buffer read and write primitives
- *  Write to the head, read from the tail. Change these to rd and wr to be clearer ++++++++++++++++++++++++
- *	You can make these blocking routines by calling them in an infinite
- *	while() waiting for something other than _FDEV_ERR to be returned.
+ * You can make these blocking routines by calling them in an infinite while()
+ * waiting for something other than _FDEV_ERR to be returned.
  */
 
 int xio_read_buffer(xioBuf_t *b) 
 {
-	if (b->head == b->tail) { return (_FDEV_ERR);}	// return if queue empty
-	if ((--(b->tail)) == 0) { b->tail = b->size;}	// advance tail with wrap
-	return (b->buf[b->tail]);						// return character from buffer
-}													// leave tail on returned char
+	if (b->wr == b->rd) { return (_FDEV_ERR);}	// return if queue empty
+	if ((--(b->rd)) == 0) { b->rd = b->size;}	// advance tail with wrap
+	return (b->buf[b->rd]);						// return character from buffer
+}												// leave rd on returned char
 
 int xio_write_buffer(xioBuf_t *b, char c) 
 {
-	buffer_t next_head = b->head-1;					// pre-advance head to temporary variable
-	if (next_head == 0) { next_head = b->size;}		// advance head with wrap
-	if (next_head == b->tail) { return (_FDEV_ERR);}// return if queue full
-	b->buf[next_head] = c;							// write char to buffer
-	b->head = next_head;							// advance head to temp
-	return (XIO_OK);								// leave head on written char
+	buffer_t next_wr = b->wr-1;					// pre-advance head to temporary variable
+	if (next_wr == 0) { next_wr = b->size;}		// advance head with wrap
+	if (next_wr == b->rd) { return (_FDEV_ERR);}// return if queue full
+	b->buf[next_wr] = c;						// write char to buffer
+	b->wr = next_wr;							// advance head from temp
+	return (XIO_OK);							// leave head on written char
 }
 
 /******************************************************************************
@@ -248,9 +247,9 @@ int xio_write_buffer(xioBuf_t *b, char c)
 
 #ifdef __XIO_UNIT_TESTS
 static void _transmit_test(uint8_t dev);
-static void _loopback_test(uint8_t dev);
-static void _loopfake_test(uint8_t dev);
-static void _message_test(uint8_t dev);
+//static void _loopback_test(uint8_t dev);
+//static void _loopfake_test(uint8_t dev);
+//static void _message_test(uint8_t dev);
 //static void _pgm_read_test();
 
 int c;
@@ -260,19 +259,26 @@ char sequence[8] = {"01234567"};
 
 void xio_unit_tests()
 {
-//	_transmit_test(XIO_DEV_USART);		// never returns
-//	_loopback_test(XIO_DEV_USART);		// never returns
-//	_loopfake_test(XIO_DEV_USART);		// never returns
+	_transmit_test(XIO_DEV_USART);			// never returns
+//	_loopback_test(XIO_DEV_USART);			// never returns
+//	_loopfake_test(XIO_DEV_USART);			// never returns
 
-//	_loopback_test(XIO_DEV_SPI);		// never returns
-	_message_test(XIO_DEV_SPI);			// never returns
+//	_loopback_test(XIO_DEV_SPI);			// never returns
+//	_message_test(XIO_DEV_SPI);				// never returns
 }
 
 static void _transmit_test(uint8_t dev)		// never returns
 {
-	while (true) { xio_putc(dev, '5');}
-}
+//	while (true) { xio_putc(dev, '5');}
 
+	uint8_t i = 0;
+	while (true) {
+		if (xio_putc(dev, sequence[i]) != _FDEV_ERR) {
+			i = ((i+1) & 0x07);						
+		}
+	}
+}
+/*
 static void _message_test(uint8_t dev)		// never returns
 {
 	while (true) {
@@ -298,7 +304,7 @@ static void _loopfake_test(uint8_t dev)		// never returns
 
 	while (true) {
 		xio_write_buffer(ds[dev]->rx, sequence[i]);
-		i = (++i & 0x07);						
+		i = ((i+1) & 0x07);						
 		c = xio_getc(dev);
 //		c = '5';
 		if (c != (char)_FDEV_ERR) {
@@ -306,7 +312,7 @@ static void _loopfake_test(uint8_t dev)		// never returns
 		}
 	}
 }
-
+*/
 /*
 void _pgm_read_test()
 {	

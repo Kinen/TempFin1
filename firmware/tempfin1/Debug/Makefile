@@ -43,7 +43,6 @@ C_SRCS +=  \
 ../system.c \
 ../util.c \
 ../xio/xio.c \
-../xio/xio_signals.c \
 ../xio/xio_spi.c \
 ../xio/xio_usart.c
 
@@ -62,7 +61,6 @@ report.o \
 system.o \
 util.o \
 xio/xio.o \
-xio/xio_signals.o \
 xio/xio_spi.o \
 xio/xio_usart.o
 
@@ -75,7 +73,6 @@ report.o \
 system.o \
 util.o \
 xio/xio.o \
-xio/xio_signals.o \
 xio/xio_spi.o \
 xio/xio_usart.o
 
@@ -88,7 +85,6 @@ report.d \
 system.d \
 util.d \
 xio/xio.d \
-xio/xio_signals.d \
 xio/xio_spi.d \
 xio/xio_usart.d
 
@@ -101,7 +97,6 @@ report.d \
 system.d \
 util.d \
 xio/xio.d \
-xio/xio_signals.d \
 xio/xio_spi.d \
 xio/xio_usart.d
 
@@ -115,8 +110,6 @@ ADDITIONAL_DEPENDENCIES:=
 OUTPUT_FILE_DEP:= ./makedep.mk
 
 # AVR32/GNU C Compiler
-
-
 
 
 

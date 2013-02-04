@@ -18,7 +18,7 @@
  *
  * The SPI master/slave protocol is designed to be as simple as possible. 
  * In short, the master transmits whenever it wants to and the slave returns
- * the next character in its output buffer whenever there's an SPI transfer.
+ * the next character in its output 		buffer whenever there's an SPI transfer.
  * No flow control is needed as the master initiates and drives all transfers.
  *
  * More details:
@@ -66,10 +66,9 @@
 
 #include "xio.h"						// includes for all devices are in here
 
-// allocate and initialize USART structs
+// allocate and initialize SPI structs
 xioSpiRX_t spi_rx = { SPI_RX_BUFFER_SIZE-1,1,1 };
 xioSpiTX_t spi_tx = { SPI_TX_BUFFER_SIZE-1,1,1 };
-
 xioDev_t spi0 = {
 		XIO_DEV_SPI,
 		xio_open_spi,
@@ -79,8 +78,7 @@ xioDev_t spi0 = {
 		xio_putc_spi,
 		xio_null,
 		(xioBuf_t *)&spi_rx,
-		(xioBuf_t *)&spi_tx,
-		// unecessary to initialize from here out...
+		(xioBuf_t *)&spi_tx,			// unecessary to initialize from here on...
 };
 
 // Fast accessors
@@ -105,10 +103,10 @@ FILE *xio_open_spi(const uint8_t dev, const char *addr, const flags_t flags)
 	xioDev_t *d = ds[dev];						// convenience device struct pointer
 	xio_reset_working_flags(d);
 	xio_ctrl_device(d, flags);					// setup control flags
-	d->rx->head = 1;							// can't use location 0 in circular buffer
-	d->rx->tail = 1;
-	d->tx->head = 1;
-	d->tx->tail = 1;
+	d->rx->wr = 1;								// can't use location 0 in circular buffer
+	d->rx->rd = 1;
+	d->tx->wr = 1;
+	d->tx->rd = 1;
 
 	// setup the SPI hardware device
 	PRR &= ~PRSPI_bm;							// Enable SPI in power reduction register (system.h)
@@ -138,6 +136,11 @@ int xio_putc_spi(const char c, FILE *stream)
 
 ISR(SPI_STC_vect)
 {
+	char c = SPDR;								// read the incoming character; save it
+	int c_out = xio_read_buffer(SPItx); 		// stage the next char to transmit on MISO from the TX buffer
+	if (c_out ==_FDEV_ERR) SPDR = ETX; else SPDR = (char)c_out;	// stage next TX char or ETX if none	
+	xio_write_buffer(SPIrx, c);					// write incoming char into RX buffer
+
 //	char c = SPDR;									// read the incoming character; save it
 //	if (SPIrx->head == SPIrx->tail) { SPDR = NAK;}	// RX buffer is full. - send NAK to master
 //	if (SPItx->head == SPItx->tail) { SPDR = ETX;}	// TX buffer is empty - send ETX to master
@@ -150,11 +153,6 @@ ISR(SPI_STC_vect)
 //	char c = SPDR;								// read the incoming character; save it
 //	SPDR = c_out;
 //	xio_write_buffer(SPIrx, c);					// write incoming char into RX buffer
-
-	char c = SPDR;								// read the incoming character; save it
-	int c_out = xio_read_buffer(SPItx); 		// stage the next char to transmit on MISO from the TX buffer
-	if (c_out ==_FDEV_ERR) SPDR = ETX; else SPDR = (char)c_out;	// stage next TX char or ETX if none	
-	xio_write_buffer(SPIrx, c);					// write incoming char into RX buffer
 
 //	char c = SPDR;								// read the incoming character; save it
 //	if (SPItx->head == SPItx->tail) { SPDR = ETX;}

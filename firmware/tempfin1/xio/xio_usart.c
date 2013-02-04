@@ -35,7 +35,6 @@
 // allocate and initialize USART structs
 xioUsartRX_t usart_rx = { USART_RX_BUFFER_SIZE-1,1,1 };
 xioUsartTX_t usart_tx = { USART_TX_BUFFER_SIZE-1,1,1 };
-
 xioDev_t usart0 = {
 		XIO_DEV_USART,
 		xio_open_usart,
@@ -45,9 +44,7 @@ xioDev_t usart0 = {
 		xio_putc_usart,
 		xio_null,
 		(xioBuf_t *)&usart_rx,
-		(xioBuf_t *)&usart_tx,
-		(void *)NULL,				// extended device struct optional binding
-		// unnecessary to initialize the rest of the struct 
+		(xioBuf_t *)&usart_tx,		// unnecessary to initialize the rest of the struct 
 };
 
 // Fast accessors
@@ -75,10 +72,10 @@ FILE *xio_open_usart(const uint8_t dev, const char *addr, const flags_t flags)
 	xioDev_t *d = ds[dev];						// convenience device struct pointer
 	xio_reset_working_flags(d);
 	xio_ctrl_device(d, flags);					// setup control flags
-	d->rx->head = 1;							// can't use location 0 in circular buffer
-	d->rx->tail = 1;
-	d->tx->head = 1;
-	d->tx->tail = 1;
+	d->rx->wr = 1;								// can't use location 0 in circular buffer
+	d->rx->rd = 1;
+	d->tx->wr = 1;
+	d->tx->rd = 1;
 
 	// setup the hardware
 	PRR &= ~PRUSART0_bm;		// Enable the USART in the power reduction register (system.h)
@@ -113,9 +110,9 @@ ISR(USART_UDRE_vect)
 {
 	int c = xio_read_buffer(USARTtx);
 	if (c == _FDEV_ERR) {
-		UCSR0B &= ~(1<<UDRIE0); 
+		UCSR0B &= ~(1<<UDRIE0); 	// disable interrupts
 	} else {
-		UDR0 = (char)c;
+		UDR0 = (char)c;				// write char to USART xmit register
 	}
 }
 
