@@ -36,7 +36,9 @@ SUBDIRS :=  \
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS +=  \
+../config.c \
 ../heater.c \
+../json_parser.c \
 ../kinen.c \
 ../main.c \
 ../report.c \
@@ -55,7 +57,9 @@ ASM_SRCS +=
 
 
 OBJS +=  \
+config.o \
 heater.o \
+json_parser.o \
 kinen.o \
 main.o \
 report.o \
@@ -68,7 +72,9 @@ xio/xio_usart.o
 
 
 OBJS_AS_ARGS +=  \
+config.o \
 heater.o \
+json_parser.o \
 kinen.o \
 main.o \
 report.o \
@@ -81,7 +87,9 @@ xio/xio_usart.o
 
 
 C_DEPS +=  \
+config.d \
 heater.d \
+json_parser.d \
 kinen.d \
 main.d \
 report.d \
@@ -94,7 +102,9 @@ xio/xio_usart.d
 
 
 C_DEPS_AS_ARGS +=  \
+config.d \
 heater.d \
+json_parser.d \
 kinen.d \
 main.d \
 report.d \
@@ -115,6 +125,10 @@ ADDITIONAL_DEPENDENCIES:=
 OUTPUT_FILE_DEP:= ./makedep.mk
 
 # AVR32/GNU C Compiler
+
+
+
+
 
 
 

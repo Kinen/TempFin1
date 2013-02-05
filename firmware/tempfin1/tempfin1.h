@@ -17,7 +17,7 @@
 #ifndef tempfin1_h
 #define tempfin1_h
 
-#define BUILD_NUMBER 		006.01			// Adding in config subsystem and JSON
+#define BUILD_NUMBER 		006.02			// Adding in config subsystem and JSON
 #define VERSION_NUMBER		0.1				// firmware major version
 #define HARDWARE_VERSION	0.1				// board revision number
 
@@ -28,7 +28,6 @@
 //#define __SUPPRESS_STARTUP_MESSAGES 		// what it says
 //#define __TF1_UNIT_TESTS					// uncomment to compile and run TempFin1 unit tests
 											// uncomment __XIO_UNIT_TESTS in xio.h if you need those
-
 
 /******************************************************************************
  * DEFINE UNIT TESTS

@@ -1,19 +1,8 @@
 /*
  * config.c - configuration handling and persistence; master function table
- * Part of TinyG project
+ * Part of Kinen project
  *
  * Copyright (c) 2010 - 2013 Alden S. Hart Jr.
- *
- * TinyG is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by 
- * the Free Software Foundation, either version 3 of the License, 
- * or (at your option) any later version.
- *
- * TinyG is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License 
- * for details. You should have received a copy of the GNU General Public 
- * License along with TinyG  If not, see <http://www.gnu.org/licenses/>.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -23,70 +12,62 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-/*
- *	Config system overview
+/*	Config system overview
  *
- *	--- Config objects and the config list ---
+ * --- Config objects and the config list ---
  *
- *	The config system provides a structured way to access and set configuration variables.
- *	It also provides a way to get an arbitrary variable for reporting. Config operates
- *	as a collection of "objects" (OK, so they are not really objects) that encapsulate
- *	each variable. The objects are collected into a list (the body), which also has  
- *	header and footer objects. This way the internals don't care about how the variable
- *	is represented or communicated externally as all operations occur on the cmdObj list. 
- *	The list is populated by the text_parser or the JSON_parser depending on the mode.
- *	The lists are also used for responses and are read out (printed) by a text-mode or
- *	JSON print function.
+ *	The config system provides a structured way to access and set configuration variables
+ *	and to invoke commands and functions from the command line and from JSON input.
+ *	It also provides a way to get to an arbitrary variable for reading or display.
+ *
+ *	Config operates as a collection of "objects" (OK, so they are not really objects) 
+ *	that encapsulate each variable. The objects are collected into a list (a body) 
+ *	which may also have header and footer objects. 
+ *
+ *	This way the internals don't care about how the variable is represented or 
+ *	communicated externally as all operations occur on the cmdObj list. The list is 
+ *	populated by the text_parser or the JSON_parser depending on the mode. Lists 
+ *	are also used for responses and are read out (printed) by a text-mode or JSON 
+ *	print functions.
  */
-/*	--- Config variables, tables and strings ---
+/* --- Config variables, tables and strings ---
  *
  *	Each configuration value is identified by a short mnemonic string (token). The token 
- *	is resolved to an index into the cfgArray which is an array of structures with the 
- *	static assignments for each variable. The array is organized as:
+ *	is resolved to an index into the cfgArray which is an program memory (PROGMEM) array 
+ *	of structures with the static assignments for each variable. The array is organized as:
  * 
- *	- cfgArray contains typed data in program memory (PROGMEM). Each cfgItem has:
- *		- group string identifying what group the variable is part of (if any)
- *		- token string - the token for that variable - pre-pended with the group (if any)
- *		- operations flags - flag if the value should be initialized and/or persisted to NVM
- *		- pointer to a formatted print string also in program memory (Used only for text mode)
- *		- function pointer for formatted print() method or text-mode readouts
- *		- function pointer for get() method - gets values from memory
- *		- function pointer for set() method - sets values and runs functions
- *		- target - memory location that the value is written to / read from
- *		- default value - for cold initialization
+ *	  - group string identifying what group the variable is part of (if any)
+ *	  - token string - the token for that variable - pre-pended with the group (if any)
+ *	  - operations flags - flag if the value should be initialized, persisted, etc.
+ *	  - pointer to a formatted print string also in program memory (Used only for text mode)
+ *	  - function pointer for formatted print() method or text-mode readouts
+ *	  - function pointer for get() method - gets values from memory
+ *	  - function pointer for set() method - sets values and runs functions
+ *	  - target - memory location that the value is written to / read from
+ *	  - default value - for cold initialization
  *
- *	Additionally an NVM array contains values persisted to EEPROM as doubles; indexed by cfgArray index
+ *	Persistence is provided by an NVM array containing values in EEPROM as doubles; 
+ *	indexed by cfgArray index
  *
  *	The following rules apply to mnemonic tokens
  *	 - are up to 5 alphnuneric characters and cannot contain whitespace or separators
  *	 - must be unique (non colliding).
- *	 - axis tokens start with the axis letter and are typically 3 characters including the axis letter
- *	 - motor tokens start with the motor digit and are typically 3 characters including the motor digit
- *	 - non-axis or non-motor tokens are 2-5 characters and by convention generally should not start 
- *		with: xyzabcuvw0123456789 (but there can be exceptions)
  *
- *  "Groups" are collections of values that mimic REST resources. Groups include:
- *	 - axis groups prefixed by "xyzabc"		("uvw" are reserved)
- *	 - motor groups prefixed by "1234"		("56789" are reserved)
- *	 - PWM groups prefixed by p1, p2 	    (p3 - p9 are reserved)
- *	 - coordinate system groups prefixed by g54, g55, g56, g57, g59, g92
+ *  "Groups" are collections of values that mimic REST composite resources. Groups include:
  *	 - a system group is identified by "sys" and contains a collection of otherwise unrelated values
  *
  *	"Uber-groups" are groups of groups that are only used for text-mode printing - e.g.
- *	 - group of all axes groups
- *	 - group of all motor groups
- *	 - group of all offset groups
  *	 - group of all groups
  */
-/*  --- Making changes and adding new values
+/* --- Making changes and adding new values
  *
  *	Adding a new value to config (or changing an existing one) involves touching the following places:
  *
  *	 - Add a formatting string to fmt_XXX strings. Not needed if there is no text-mode print function
- *	   of you are using one of the generic print strings.
+ *	   of you are using one of the generic print format strings.
  * 
- *	 - Create a new record in cfgArray[]. Use existing ones for examples. You can usually use existing
- *	   functions for get and set; or create a new one if you need a specialized function.
+ *	 - Create a new record in cfgArray[]. Use existing ones for examples. You can usually use 
+ *	   generic functions for get and set; or create a new one if you need a specialized function.
  *
  *	   The ordering of group displays is set by the order of items in cfgArray. None of the other 
  *	   orders matter but are generally kept sequenced for easier reading and code maintenance. Also,
@@ -95,11 +76,11 @@
  *	   Note that matching will occur from the most specific to the least specific, meaning that
  *	   if tokens overlap the longer one should be earlier in the array: "gco" should precede "gc".
  */
-/*  --- Rules, guidelines and random stuff
+/* --- Rules, guidelines and random stuff
  *
- *	It's the responsibility of the object creator to set the index. Downstream functions
- *	all expect a valid index. Set the index by calling cmd_get_index(). This also validates
- *	the token and group if no lookup exists.
+ *	It's the responsibility of the object creator to set the index in the cmdObj when a variable
+ *	is "hydrated". Many downstream function expect a valid index int he cmdObj struct. Set the 
+ *	index by calling cmd_get_index(). This also validates the token and group if no lookup exists.
  */
 #include <ctype.h>
 #include <stdlib.h>
@@ -148,7 +129,7 @@ typedef struct cfgItem {
 // operations flags and shorthand
 #define F_INITIALIZE	0x01			// initialize this item (run set during initialization)
 #define F_PERSIST 		0x02			// persist this item when set is run
-#define F_NOSTRIP		0x04			// do not strip to group from the token
+#define F_NOSTRIP		0x04			// do not strip the group prefix from the token
 #define _f00			0x00
 #define _fin			F_INITIALIZE
 #define _fpe			F_PERSIST
@@ -160,27 +141,27 @@ typedef struct cfgItem {
 
 // generic internal functions
 static uint8_t _set_nul(cmdObj_t *cmd);	// noop
-static uint8_t _set_ui8(cmdObj_t *cmd);	// set a uint8_t value
-static uint8_t _set_int(cmdObj_t *cmd);	// set an integer value
+//static uint8_t _set_ui8(cmdObj_t *cmd);	// set a uint8_t value
+//static uint8_t _set_int(cmdObj_t *cmd);	// set an integer value
 static uint8_t _set_dbl(cmdObj_t *cmd);	// set a double value
 
 static uint8_t _get_nul(cmdObj_t *cmd);	// get null value type
-static uint8_t _get_ui8(cmdObj_t *cmd);	// get uint8_t value
-static uint8_t _get_int(cmdObj_t *cmd);	// get uint32_t integer value
+//static uint8_t _get_ui8(cmdObj_t *cmd);	// get uint8_t value
+//static uint8_t _get_int(cmdObj_t *cmd);	// get uint32_t integer value
 static uint8_t _get_dbl(cmdObj_t *cmd);	// get double value
 
 static void _print_nul(cmdObj_t *cmd);	// print nothing
-static void _print_str(cmdObj_t *cmd);	// print a string value
-static void _print_ui8(cmdObj_t *cmd);	// print unit8_t value w/no units
-static void _print_int(cmdObj_t *cmd);	// print integer value w/no units
+//static void _print_str(cmdObj_t *cmd);	// print a string value
+//static void _print_ui8(cmdObj_t *cmd);	// print unit8_t value w/no units
+//static void _print_int(cmdObj_t *cmd);	// print integer value w/no units
 static void _print_dbl(cmdObj_t *cmd);	// print double value w/no units
 
 // helpers for generic functions
 static char *_get_format(const index_t i, char *format);
 //static uint8_t _text_parser(char *str, cmdObj_t *c);
-static void _print_text_inline_pairs();
-static void _print_text_inline_values();
-static void _print_text_multiline_formatted();
+//static void _print_text_inline_pairs();
+//static void _print_text_inline_values();
+//static void _print_text_multiline_formatted();
 
 static uint8_t _set_grp(cmdObj_t *cmd);	// set data for a group
 static uint8_t _get_grp(cmdObj_t *cmd);	// get data for a group
@@ -234,7 +215,7 @@ static const char fmt_str[] PROGMEM = "%s\n";	// generic format for string messa
 static const char fmt_fv[] PROGMEM = "[fv]  firmware version%16.2f\n";
 static const char fmt_fb[] PROGMEM = "[fb]  firmware build%18.2f\n";
 static const char fmt_hv[] PROGMEM = "[hv]  hardware version%16.2f\n";
-static const char fmt_id[] PROGMEM = "[id]  TinyG ID%30s\n";
+//static const char fmt_id[] PROGMEM = "[id]  TinyG ID%30s\n";
 
 /***** PROGMEM config array **************************************************
  *
@@ -330,88 +311,6 @@ static uint8_t _set_hv(cmdObj_t *cmd)
 	return (SC_OK);
 }
 
-/**** REPORT FUNCTIONS ****
- * _get_sr()   - run status report
- * _print_sr() - run status report
- * _set_sr()   - set status report specification
- * _set_si()   - set status report interval
- * cmd_set_jv() - set JSON verbosity level (exposed) - for details see jsonVerbosity in config.h
- * cmd_set_tv() - set text verbosity level (exposed) - for details see textVerbosity in config.h
- */
-static uint8_t _get_sr(cmdObj_t *cmd)
-{
-//	rpt_populate_unfiltered_status_report();
-	return (SC_OK);
-}
-
-static void _print_sr(cmdObj_t *cmd)
-{
-//	rpt_populate_unfiltered_status_report();
-}
-
-static uint8_t _set_sr(cmdObj_t *cmd)
-{
-/*
-	memset(cfg.status_report_list, 0 , sizeof(cfg.status_report_list));
-	for (uint8_t i=0; i<CMD_STATUS_REPORT_LEN; i++) {
-		if ((cmd = cmd->nx) == NULL) break;
-		cfg.status_report_list[i] = cmd->index;
-		cmd->value = cmd->index;	// you want to persist the index as the value
-		cmd_persist(cmd);
-	}
-*/
-	return (SC_OK);
-}
-
-static uint8_t _set_si(cmdObj_t *cmd) 
-{
-/*
-	if ((cmd->value < STATUS_REPORT_MIN_MS) && (cmd->value!=0)) {
-		cmd->value = STATUS_REPORT_MIN_MS;
-	}
-	cfg.status_report_interval = (uint32_t)cmd->value;
-*/
-	return(SC_OK);
-}
-
-uint8_t cmd_set_jv(cmdObj_t *cmd) 
-{
-/*
-	cfg.json_verbosity = cmd->value;
-
-	cfg.echo_json_footer = false;
-	cfg.echo_json_configs = false;
-	cfg.echo_json_messages = false;
-	cfg.echo_json_linenum = false;
-	cfg.echo_json_gcode_block = false;
-
-	if (cmd->value >= JV_FOOTER) 	{ cfg.echo_json_footer = true;}
-	if (cmd->value >= JV_CONFIGS)	{ cfg.echo_json_configs = true;}
-	if (cmd->value >= JV_MESSAGES)	{ cfg.echo_json_messages = true;}
-	if (cmd->value >= JV_LINENUM)	{ cfg.echo_json_linenum = true;}
-	if (cmd->value >= JV_VERBOSE)	{ cfg.echo_json_gcode_block = true;}
-*/
-	return(SC_OK);
-}
-
-uint8_t cmd_set_tv(cmdObj_t *cmd) 
-{
-/*
-	cfg.text_verbosity = cmd->value;
-
-	cfg.echo_text_prompt = false;
-	cfg.echo_text_messages = false;
-	cfg.echo_text_configs = false;
-	cfg.echo_text_gcode_block = false;
-
-	if (cmd->value >= TV_PROMPT)	{ cfg.echo_text_prompt = true;} 
-	if (cmd->value >= TV_MESSAGES)	{ cfg.echo_text_messages = true;}
-	if (cmd->value >= TV_CONFIGS)	{ cfg.echo_text_configs = true;}
-	if (cmd->value >= TV_VERBOSE)	{ cfg.echo_text_gcode_block = true;}
-*/
-	return(SC_OK);
-}
-
 /**** COMMUNICATIONS SETTINGS ****
  * _set_ic() - ignore CR or LF on RX
  * _set_ec() - enable CRLF on TX
@@ -421,21 +320,20 @@ uint8_t cmd_set_tv(cmdObj_t *cmd)
  *	The above assume USB is the std device
  */
 
+/*
 static uint8_t _set_comm_helper(cmdObj_t *cmd, uint32_t yes, uint32_t no)
 {
-/*
 	if (fp_NOT_ZERO(cmd->value)) { 
 		(void)xio_ctrl(XIO_DEV_USB, yes);
 	} else { 
 		(void)xio_ctrl(XIO_DEV_USB, no);
 	}
-*/
 	return (SC_OK);
 }
 
 static uint8_t _set_ic(cmdObj_t *cmd) 	// ignore CR or LF on RX
 {
-/*	cfg.ignore_crlf = (uint8_t)cmd->value;
+	cfg.ignore_crlf = (uint8_t)cmd->value;
 	(void)xio_ctrl(XIO_DEV_USB, XIO_NOIGNORECR);	// clear them both
 	(void)xio_ctrl(XIO_DEV_USB, XIO_NOIGNORELF);
 
@@ -444,36 +342,32 @@ static uint8_t _set_ic(cmdObj_t *cmd) 	// ignore CR or LF on RX
 	} else if (cfg.ignore_crlf == IGNORE_LF) {		// $ic=2
 		(void)xio_ctrl(XIO_DEV_USB, XIO_IGNORELF);
 	}
-*/
 	return (SC_OK);
 }
 
 static uint8_t _set_ec(cmdObj_t *cmd) 	// expand CR to CRLF on TX
 {
-/*	cfg.enable_cr = (uint8_t)cmd->value;
+	cfg.enable_cr = (uint8_t)cmd->value;
 	return(_set_comm_helper(cmd, XIO_CRLF, XIO_NOCRLF));
-*/
 	return (SC_OK);
 }
 
 static uint8_t _set_ee(cmdObj_t *cmd) 	// enable character echo
 {
-/*	cfg.enable_echo = (uint8_t)cmd->value;
+	cfg.enable_echo = (uint8_t)cmd->value;
 	return(_set_comm_helper(cmd, XIO_ECHO, XIO_NOECHO));
-*/
 	return (SC_OK);
 }
 
 static uint8_t _set_ex(cmdObj_t *cmd)		// enable XON/XOFF
 {
-/*	cfg.enable_xon = (uint8_t)cmd->value;
+	cfg.enable_xon = (uint8_t)cmd->value;
 	return(_set_comm_helper(cmd, XIO_XOFF, XIO_NOXOFF));
-*/
 	return (SC_OK);
 }
-
+*/
 /*
- * _set_baud() - set USB baud rate
+ * _set_baud() - set USART baud rate
  *
  *	See xio_usart.h for valid values. Works as a callback.
  *	The initial routine changes the baud config setting and sets a flag
@@ -481,10 +375,10 @@ static uint8_t _set_ex(cmdObj_t *cmd)		// enable XON/XOFF
  *	Then it waits for the TX buffer to empty (so the message is sent)
  *	Then it performs the callback to apply the new baud rate
  */
-
+/*
 static uint8_t _set_baud(cmdObj_t *cmd)
 {
-/*	uint8_t baud = (uint8_t)cmd->value;
+	uint8_t baud = (uint8_t)cmd->value;
 	if ((baud < 1) || (baud > 6)) {
 		cmd_add_message_P(PSTR("*** WARNING *** Illegal baud rate specified"));
 		return (SC_INPUT_VALUE_UNSUPPORTED);
@@ -494,18 +388,17 @@ static uint8_t _set_baud(cmdObj_t *cmd)
 	char message[CMD_MESSAGE_LEN]; 
 	sprintf_P(message, PSTR("*** NOTICE *** Restting baud rate to %S"),(PGM_P)pgm_read_word(&msg_baud[baud]));
 	cmd_add_message(message);
-*/
 	return (SC_OK);
 }
 
 uint8_t cfg_baud_rate_callback(void) 
 {
-/*	if (cfg.usb_baud_flag == false) { return(SC_NOOP);}
+	if (cfg.usb_baud_flag == false) { return(SC_NOOP);}
 	cfg.usb_baud_flag = false;
 	xio_set_baud(XIO_DEV_USB, cfg.usb_baud_rate);
-*/
 	return (SC_OK);
 }
+*/
 
 /**** UberGroup Operations ****
  * Uber groups are groups of groups organized for convenience:
@@ -639,10 +532,9 @@ void cfg_init()
 	rpt_init_status_report(true);// requires special treatment (persist = true)
 */
 }
-
+/*
 static uint8_t _set_defa(cmdObj_t *cmd) 
 {
-/*
 	if (cmd->value != true) {		// failsafe. Must set true or no action occurs
 		print_defaults_help(cmd);
 		return (SC_OK);
@@ -658,9 +550,9 @@ static uint8_t _set_defa(cmdObj_t *cmd)
 			cmd_persist(cmd);
 		}
 	}
-*/
 	return (SC_OK);
 }
+*/
 
 /****************************************************************************
  * cfg_text_parser() - update a config setting from a text block (text mode)
@@ -738,60 +630,74 @@ static uint8_t _text_parser(char *str, cmdObj_t *cmd)
 */
 
 /***** Generic Internal Functions *******************************************
+ * Generic gets()
+ * _get_nul() - get nothing (returns SC_NOOP)
+ * _get_ui8() - get value as 8 bit uint8_t w/o unit conversion
+ * _get_int() - get value as 32 bit integer w/o unit conversion
+ * _get_dbl() - get value as double w/o unit conversion
+ *
  * Generic sets()
  * _set_nul() - set nothing (returns SC_NOOP)
  * _set_ui8() - set value as 8 bit uint8_t value w/o unit conversion
  * _set_int() - set value as 32 bit integer w/o unit conversion
  * _set_dbl() - set value as double w/o unit conversion
  *
- * Generic gets()
- * _get_nul() - get nothing (returns SC_NOOP)
- * _get_ui8() - get value as 8 bit uint8_t w/o unit conversion
- * _get_int() - get value as 32 bit integer w/o unit conversion
- * _get_dbl() - get value as double w/o unit conversion
+ * Generic prints()
+ * _print_nul() - print nothing
+ * _print_ui8() - print uint8_t value w/no units or unit conversion
+ * _print_int() - print integer value w/no units or unit conversion
+ * _print_dbl() - print double value w/no units or unit conversion
+ * _print_str() - print string value
  */
+
 static uint8_t _set_nul(cmdObj_t *cmd) { return (SC_NOOP);}
-
-static uint8_t _set_ui8(cmdObj_t *cmd)
-{
-	*((uint8_t *)pgm_read_word(&cfgArray[cmd->index].target)) = cmd->value;
-	cmd->type = TYPE_INTEGER;
-	return(SC_OK);
-}
-
-static uint8_t _set_int(cmdObj_t *cmd)
-{
-	*((uint32_t *)pgm_read_word(&cfgArray[cmd->index].target)) = cmd->value;
-	cmd->type = TYPE_INTEGER;
-	return(SC_OK);
-}
-
-static uint8_t _set_dbl(cmdObj_t *cmd)
-{
-	*((double *)pgm_read_word(&cfgArray[cmd->index].target)) = cmd->value;
-	cmd->type = TYPE_FLOAT;
-	return(SC_OK);
-}
-
+static void _print_nul(cmdObj_t *cmd) {}
 static uint8_t _get_nul(cmdObj_t *cmd) 
 { 
 	cmd->type = TYPE_NULL;
 	return (SC_NOOP);
 }
 
+/*
 static uint8_t _get_ui8(cmdObj_t *cmd)
 {
 	cmd->value = (double)*((uint8_t *)pgm_read_word(&cfgArray[cmd->index].target));
 	cmd->type = TYPE_INTEGER;
 	return (SC_OK);
 }
-
+static uint8_t _set_ui8(cmdObj_t *cmd)
+{
+	*((uint8_t *)pgm_read_word(&cfgArray[cmd->index].target)) = cmd->value;
+	cmd->type = TYPE_INTEGER;
+	return(SC_OK);
+}
+static void _print_ui8(cmdObj_t *cmd)
+{
+	cmd_get(cmd);
+	char format[CMD_FORMAT_LEN+1];
+	fprintf(stderr, _get_format(cmd->index, format), (uint8_t)cmd->value);
+}
+*/
+/*
 static uint8_t _get_int(cmdObj_t *cmd)
 {
 	cmd->value = (double)*((uint32_t *)pgm_read_word(&cfgArray[cmd->index].target));
 	cmd->type = TYPE_INTEGER;
 	return (SC_OK);
 }
+static uint8_t _set_int(cmdObj_t *cmd)
+{
+	*((uint32_t *)pgm_read_word(&cfgArray[cmd->index].target)) = cmd->value;
+	cmd->type = TYPE_INTEGER;
+	return(SC_OK);
+}
+static void _print_int(cmdObj_t *cmd)
+{
+	cmd_get(cmd);
+	char format[CMD_FORMAT_LEN+1];
+	fprintf(stderr, _get_format(cmd->index, format), (uint32_t)cmd->value);
+}
+*/
 
 static uint8_t _get_dbl(cmdObj_t *cmd)
 {
@@ -799,37 +705,12 @@ static uint8_t _get_dbl(cmdObj_t *cmd)
 	cmd->type = TYPE_FLOAT;
 	return (SC_OK);
 }
-
-/* Generic prints()
- * _print_nul() - print nothing
- * _print_str() - print string value
- * _print_ui8() - print uint8_t value w/no units or unit conversion
- * _print_int() - print integer value w/no units or unit conversion
- * _print_dbl() - print double value w/no units or unit conversion
- */
-static void _print_nul(cmdObj_t *cmd) {}
-
-static void _print_str(cmdObj_t *cmd)
+static uint8_t _set_dbl(cmdObj_t *cmd)
 {
-	cmd_get(cmd);
-	char format[CMD_FORMAT_LEN+1];
-	fprintf(stderr, _get_format(cmd->index, format), *cmd->stringp);
+	*((double *)pgm_read_word(&cfgArray[cmd->index].target)) = cmd->value;
+	cmd->type = TYPE_FLOAT;
+	return(SC_OK);
 }
-
-static void _print_ui8(cmdObj_t *cmd)
-{
-	cmd_get(cmd);
-	char format[CMD_FORMAT_LEN+1];
-	fprintf(stderr, _get_format(cmd->index, format), (uint8_t)cmd->value);
-}
-
-static void _print_int(cmdObj_t *cmd)
-{
-	cmd_get(cmd);
-	char format[CMD_FORMAT_LEN+1];
-	fprintf(stderr, _get_format(cmd->index, format), (uint32_t)cmd->value);
-}
-
 static void _print_dbl(cmdObj_t *cmd)
 {
 	cmd_get(cmd);
@@ -837,82 +718,31 @@ static void _print_dbl(cmdObj_t *cmd)
 	fprintf(stderr, _get_format(cmd->index, format), cmd->value);
 }
 
+/*
+static void _print_str(cmdObj_t *cmd)
+{
+	cmd_get(cmd);
+	char format[CMD_FORMAT_LEN+1];
+	fprintf(stderr, _get_format(cmd->index, format), *cmd->stringp);
+}
+*/
+
 
 /***************************************************************************** 
  * Accessors - get various data from an object given the index
  * _get_format() 	- return format string for an index
- * _get_motor()		- return the motor number as an index or -1 if na
- * _get_axis()		- return the axis as an index or -1 if na 
- * _get_pos_axis()	- return axis number for pos values or -1 if none - e.g. posx
  */
 static char *_get_format(const index_t i, char *format)
 {
 	strncpy_P(format, (PGM_P)pgm_read_word(&cfgArray[i].format), CMD_FORMAT_LEN);
 	return (format);
 }
-/*
-static int8_t _get_motor(const index_t i)
-{
-	char *ptr;
-	char motors[] = {"1234"};
-	char tmp[CMD_TOKEN_LEN+1];
-
-	strcpy_P(tmp, cfgArray[i].group);
-	if ((ptr = strchr(motors, tmp[0])) == NULL) {
-		return (-1);
-	}
-	return (ptr - motors);
-}
-
-static int8_t _get_axis(const index_t i)
-{
-	char *ptr;
-	char tmp[CMD_TOKEN_LEN+1];
-	char axes[] = {"xyzabc"};
-
-	strcpy_P(tmp, cfgArray[i].token);
-	if ((ptr = strchr(axes, tmp[0])) == NULL) { return (-1);}
-	return (ptr - axes);
-}
-
-static int8_t _get_pos_axis(const index_t i)
-{
-	char *ptr;
-	char tmp[CMD_TOKEN_LEN+1];
-	char axes[] = {"xyzabc"};
-
-	strcpy_P(tmp, cfgArray[i].token);
-	if ((ptr = strchr(axes, tmp[3])) == NULL) { return (-1);}
-	return (ptr - axes);
-}
-*/
 
 /********************************************************************************
  * Group operations
- *
- *	Group operations work on parent/child groups where the parent is one of:
- *	  axis group 			x,y,z,a,b,c
- *	  motor group			1,2,3,4
- *	  PWM group				p1
- *	  coordinate group		g54,g55,g56,g57,g58,g59,g92
- *	  system group			"sys" - a collection of otherwise unrelated variables
- *
- *	Text mode can only GET groups. For example:
- *	  $x					get all members of an axis group
- *	  $1					get all members of a motor group
- *	  $<grp>				get any named group from the above lists
- *
- *	In JSON groups are carried as parent / child objects & can get and set elements:
- *	  {"x":""}						get all X axis parameters
- *	  {"x":{"vm":""}}				get X axis velocity max 
- *	  {"x":{"vm":1000}}				set X axis velocity max
- *	  {"x":{"vm":"","fr":""}}		get X axis velocity max and feed rate 
- *	  {"x":{"vm":1000,"fr";900}}	set X axis velocity max and feed rate
- *	  {"x":{"am":1,"fr":800,....}}	set multiple or all X axis parameters
  */
-
 /*
- * _get_grp() - read data from axis, motor, system or other group
+ * _get_grp() - read data from a group
  *
  *	_get_grp() is a group expansion function that expands the parent group and 
  *	returns the values of all the children in that group. It expects the first 
@@ -991,7 +821,6 @@ uint8_t cmd_group_is_prefixed(char *group)
  * cmd_get_type()		 - returns command type as a CMD_TYPE enum
  * cmd_persist_offsets() - write any changed G54 (et al) offsets back to NVM
  */
-
 /* 
  * cmd_get_index() is the most expensive routine in the whole config. It does a linear table scan 
  * of the PROGMEM strings, which of course could be further optimized with indexes or hashing.
@@ -1264,16 +1093,16 @@ void cmd_print_list(uint8_t status, uint8_t text_flags, uint8_t json_flags)
 			case JSON_OBJECT_FORMAT: { js_print_json_object(cmd_body); break; }
 			case JSON_RESPONSE_FORMAT: { js_print_json_response(status); break; }
 		}
-	} else {
-		switch (text_flags) {
-			case TEXT_NO_PRINT: { break; } 
-			case TEXT_INLINE_PAIRS: { _print_text_inline_pairs(); break; }
-			case TEXT_INLINE_VALUES: { _print_text_inline_values(); break; }
-			case TEXT_MULTILINE_FORMATTED: { _print_text_multiline_formatted();}
-		}
+//	} else {
+//		switch (text_flags) {
+//			case TEXT_NO_PRINT: { break; } 
+//			case TEXT_INLINE_PAIRS: { _print_text_inline_pairs(); break; }
+//			case TEXT_INLINE_VALUES: { _print_text_inline_values(); break; }
+//			case TEXT_MULTILINE_FORMATTED: { _print_text_multiline_formatted();}
+//		}
 	}
 }
-
+/*
 void _print_text_inline_pairs()
 {
 	cmdObj_t *cmd = cmd_body;
@@ -1318,7 +1147,7 @@ void _print_text_multiline_formatted()
 		if (cmd->type == TYPE_EMPTY) { break;}
 	}
 }
-
+*/
 /************************************************************************************
  ***** EEPROM access functions ******************************************************
  ************************************************************************************
