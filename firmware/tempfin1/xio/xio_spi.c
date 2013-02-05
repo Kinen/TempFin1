@@ -181,7 +181,7 @@ ISR(SPI_STC_vect)
 
 int xio_gets_spi(xioDev_t *d, char *buf, const int size)
 {
-	char c;
+	int c;
 
 	// first time thru initializations
 	if (d->flag_in_line == false) {

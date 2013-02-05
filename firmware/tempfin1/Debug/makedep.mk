@@ -2,13 +2,15 @@
 # Automatically-generated file. Do not edit or delete the file
 ################################################################################
 
-kinen_core.c
+heater.c
 
-kinen_slave_328p.c
+kinen.c
 
 main.c
 
 report.c
+
+sensor.c
 
 system.c
 

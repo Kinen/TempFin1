@@ -80,6 +80,12 @@
  *	in the USART (VERIFY THAT I DIDN'T BREAK THIS BEHAVIOR!)). Reading a character
  *	from a buffer that is in flow control should clear flow control.
  */
+/* --- What's the the int characters? ---
+ *	Single characters returned from buffer queues are treated as ints in order to 
+ *	ease compatibility with stdio. This ia a bit of a pain but is necessary to 
+ *	support _FDEV_ERR (which is -1) to be cascaded in returns to stdio functions.
+ *	Not using ints in the right place is a bug generator if messing with this code.
+ */
 #ifndef xio_h
 #define xio_h
 

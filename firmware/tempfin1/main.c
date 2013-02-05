@@ -97,7 +97,7 @@ static void _unit_tests(void)
 #define	DISPATCH(func) if (func == SC_EAGAIN) return; 
 static void _controller()
 {
-	DISPATCH(tick_callback());		// regular interval timer clock handler (ticks)
+//	DISPATCH(tick_callback());		// regular interval timer clock handler (ticks)
 }
 
 

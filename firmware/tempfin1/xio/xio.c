@@ -249,7 +249,7 @@ int xio_write_buffer(xioBuf_t *b, char c)
 static void _transmit_test(uint8_t dev);
 //static void _loopback_test(uint8_t dev);
 //static void _loopfake_test(uint8_t dev);
-//static void _message_test(uint8_t dev);
+static void _message_test(uint8_t dev);
 //static void _pgm_read_test();
 
 int c;
@@ -259,12 +259,12 @@ char sequence[8] = {"01234567"};
 
 void xio_unit_tests()
 {
-	_transmit_test(XIO_DEV_USART);			// never returns
+//	_transmit_test(XIO_DEV_USART);			// never returns
 //	_loopback_test(XIO_DEV_USART);			// never returns
 //	_loopfake_test(XIO_DEV_USART);			// never returns
 
 //	_loopback_test(XIO_DEV_SPI);			// never returns
-//	_message_test(XIO_DEV_SPI);				// never returns
+	_message_test(XIO_DEV_SPI);				// never returns
 }
 
 static void _transmit_test(uint8_t dev)		// never returns
@@ -278,7 +278,7 @@ static void _transmit_test(uint8_t dev)		// never returns
 		}
 	}
 }
-/*
+
 static void _message_test(uint8_t dev)		// never returns
 {
 	while (true) {
@@ -287,6 +287,7 @@ static void _message_test(uint8_t dev)		// never returns
 		}
 	}
 }
+/*
 
 static void _loopback_test(uint8_t dev)		// never returns
 {

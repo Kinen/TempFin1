@@ -36,10 +36,11 @@ SUBDIRS :=  \
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS +=  \
-../kinen_core.c \
-../kinen_slave_328p.c \
+../heater.c \
+../kinen.c \
 ../main.c \
 ../report.c \
+../sensor.c \
 ../system.c \
 ../util.c \
 ../xio/xio.c \
@@ -54,10 +55,11 @@ ASM_SRCS +=
 
 
 OBJS +=  \
-kinen_core.o \
-kinen_slave_328p.o \
+heater.o \
+kinen.o \
 main.o \
 report.o \
+sensor.o \
 system.o \
 util.o \
 xio/xio.o \
@@ -66,10 +68,11 @@ xio/xio_usart.o
 
 
 OBJS_AS_ARGS +=  \
-kinen_core.o \
-kinen_slave_328p.o \
+heater.o \
+kinen.o \
 main.o \
 report.o \
+sensor.o \
 system.o \
 util.o \
 xio/xio.o \
@@ -78,10 +81,11 @@ xio/xio_usart.o
 
 
 C_DEPS +=  \
-kinen_core.d \
-kinen_slave_328p.d \
+heater.d \
+kinen.d \
 main.d \
 report.d \
+sensor.d \
 system.d \
 util.d \
 xio/xio.d \
@@ -90,10 +94,11 @@ xio/xio_usart.d
 
 
 C_DEPS_AS_ARGS +=  \
-kinen_core.d \
-kinen_slave_328p.d \
+heater.d \
+kinen.d \
 main.d \
 report.d \
+sensor.d \
 system.d \
 util.d \
 xio/xio.d \
@@ -110,6 +115,8 @@ ADDITIONAL_DEPENDENCIES:=
 OUTPUT_FILE_DEP:= ./makedep.mk
 
 # AVR32/GNU C Compiler
+
+
 
 
 
