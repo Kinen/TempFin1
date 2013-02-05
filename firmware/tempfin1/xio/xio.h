@@ -86,7 +86,7 @@
 enum xioDev {			// TYPE:	DEVICE:
 	XIO_DEV_USART = 0,	// USART	USART device
 	XIO_DEV_SPI,		// SPI		SPI device
-//	XIO_DEV_PGM,		// FILE		Program memory files
+	XIO_DEV_PGM,		// FILE		Program memory files
 	XIO_DEV_COUNT		// total device count (must be last entry)
 };
 
@@ -159,7 +159,7 @@ typedef void (*x_flow_t)(xioDev_t *d);
 // all sub-includes here so only xio.h is needed externally
 #include "xio_spi.h"
 #include "xio_usart.h"
-//#include "xio_file.h"					// not yet
+#include "xio_file.h"
 
 xioDev_t *ds[XIO_DEV_COUNT];			// array of device structure pointers 
 extern struct controllerSingleton tg;	// needed by init for default source

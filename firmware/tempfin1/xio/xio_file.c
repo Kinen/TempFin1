@@ -2,22 +2,9 @@
  *  xio_file.c	- device driver for program memory "files"
  * 				- works with avr-gcc stdio library
  *
- * Part of TinyG project
+ * Part of Kinen project
  *
  * Copyright (c) 2011 - 2013 Alden S. Hart Jr.
- *
- * TinyG is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by 
- * the Free Software Foundation, either version 3 of the License, 
- * or (at your option) any later version.
- *
- * TinyG is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of 
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the GNU General Public License for details.
- *
- * You should have received a copy of the GNU General Public License 
- * along with TinyG  If not, see <http://www.gnu.org/licenses/>.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -30,72 +17,129 @@
 
 #include <stdio.h>				// precursor for xio.h
 #include <stdbool.h>			// true and false
-#include <string.h>				// for memset
 #include <avr/pgmspace.h>		// precursor for xio.h
-
-#include "xio.h"			// includes for all devices are in here
+#include "xio.h"				// includes for all devices are in here
 
 /******************************************************************************
- * FILE CONFIGURATION RECORDS
+ * FILE DEVICE CONFIGURATION
  ******************************************************************************/
 
-struct cfgFILE {
-	x_open x_open;				// see xio.h for typedefs
-	x_ctrl x_ctrl;
-	x_gets x_gets;
-	x_getc x_getc;
-	x_putc x_putc;
-	fc_func fc_func;
+xioFile_t file_x0;				// extended file struct
+
+xioDev_t file0 = {
+		XIO_DEV_PGM,
+		xio_open_pgm,
+		xio_ctrl_device,
+		xio_gets_pgm,
+		xio_getc_pgm,
+		xio_putc_pgm,
+		xio_null,
+		(xioBuf_t *)NULL,		// file IO is not buffered
+		(xioBuf_t *)NULL,
+		(xioFile_t *)&file_x0	// unnecessary to initialize the rest of the struct 
 };
 
-static struct cfgFILE const cfgFile[] PROGMEM = {
-{	// PGM config
-	xio_open_file,				// open function
-	xio_ctrl_generic, 			// ctrl function
-	xio_gets_pgm,				// get string function
-	xio_getc_pgm,				// stdio getc function
-	xio_putc_pgm,				// stdio putc function
-	xio_fc_null,				// flow control callback
-}
-};
+// Fast accessors
+#define PGMx ((xioFile_t *)(d->x))
+
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
 
-/* 
- *	xio_init_file() - initialize and set controls for file IO
- *
- *	Need to bind the open function or a subsequent opens will fail
+/*
+ *	xio_init_file() - general purpose FILE device initialization (shared)
+ *					  requires open() to be performed to complete the device init
  */
-
-void xio_init_file()
+xioDev_t *xio_init_file(uint8_t dev)
 {
-	for (uint8_t i=0; i<XIO_DEV_FILE_COUNT; i++) {
-		xio_open_generic(XIO_DEV_FILE_OFFSET + i,
-						(x_open)pgm_read_word(&cfgFile[i].x_open),
-						(x_ctrl)pgm_read_word(&cfgFile[i].x_ctrl),
-						(x_gets)pgm_read_word(&cfgFile[i].x_gets),
-						(x_getc)pgm_read_word(&cfgFile[i].x_getc),
-						(x_putc)pgm_read_word(&cfgFile[i].x_putc),
-						(fc_func)pgm_read_word(&cfgFile[i].fc_func));
-	}
+	file0.dev = dev;	// overwite the structure initialization value in case it was wrong
+	return (&file0);
 }
 
-/*	
- *	xio_open_file() - open the program memory device to a specific string address
+/*
+ *	xio_open_pgm() - open the program memory device to a specific string address
  *
  *	OK, so this is not really a UNIX open() except for its moral equivalent
  *  Returns a pointer to the stdio FILE struct or -1 on error
  */
-FILE * xio_open_file(const uint8_t dev, const char *addr, const CONTROL_T flags)
+FILE *xio_open_pgm(const uint8_t dev, const char *addr, const flags_t flags)
 {
-	xioDev *d = (xioDev *)&ds[dev];					// set device structure pointer
-	d->x = &fs[dev - XIO_DEV_FILE_OFFSET];			// bind extended struct to device
-	xioFile *dx = (xioFile *)d->x;
+	xioDev_t *d = ds[dev];			// convenience device struct pointer
+	xio_reset_device(d, flags);
+//	((xioFile_t *)(d->x))->filebase_P = (PROGMEM const char *)addr;	// might want to range check this
+//	((xioFile_t *)(d->x))->max_offset = PGM_ADDR_MAX;
+	PGMx->filebase_P = (PROGMEM const char *)addr;	// might want to range check this
+	PGMx->max_offset = PGM_ADDR_MAX;
+	return (&d->stream);			// return stdio FILE reference
+}
 
-	memset (dx, 0, sizeof(xioFile));				// clear all values
-	xio_ctrl_generic(d, flags);						// setup control flags
-	dx->filebase_P = (PROGMEM const char *)addr;	// might want to range check this
-	dx->max_offset = PGM_ADDR_MAX;
-	return(&d->file);								// return pointer to the FILE stream
+/*
+ *  xio_getc_pgm() - read a character from program memory device
+ *
+ *  Get next character from program memory file.
+ *
+ *  END OF FILE (EOF)
+ *		- set flag_eof when you encounter NUL
+ *
+ *  LINEMODE and SEMICOLONS behaviors
+ *		- consider both <cr> and <lf> to be EOL chars
+ *		- convert any EOL char to <lf> to signal end-of-string (e.g. to fgets())
+ *
+ *  ECHO behaviors
+ *		- if ECHO is enabled echo character to stdout
+ *		- echo all line termination chars as newlines ('\n')
+ */
+int xio_getc_pgm(FILE *stream)
+{
+	char c;
+	xioDev_t *d = (xioDev_t *)stream->udata;
+
+	if (d->flag_eof) { return (_FDEV_EOF);}
+	if ((c = pgm_read_byte(&PGMx->filebase_P[PGMx->rd_offset])) == NUL) {
+		d->flag_eof = true;
+	}
+	++(PGMx->rd_offset);
+
+	// processing is simple if not in LINEMODE
+	if (d->flag_linemode == false) {
+		if (d->flag_echo) putchar(c);		// conditional echo
+		return (c);
+	}
+	// now do the LINEMODE stuff
+	if (c == NUL) {							// perform newline substitutions
+		c = '\n';
+	} else if (c == '\r') {
+		c = '\n';
+	}
+	if (d->flag_echo) putchar(c);			// conditional echo
+	return (c);
+}
+
+/* 
+ *	xio_putc_pgm() - write character to to program memory device
+ *  Always returns error. You cannot write to program memory
+ */
+int xio_putc_pgm(const char c, FILE *stream)
+{
+	return -1;			// always returns an error. Big surprise.
+}
+
+/* 
+ *	xio_gets_pgm() - main loop task for program memory device
+ *
+ *	Non-blocking, run-to-completion return a line from memory
+ *	Note: LINEMODE flag is ignored. It's ALWAYS LINEMODE here.
+ */
+int xio_gets_pgm(xioDev_t *d, char *buf, const int size)
+{
+	if ((PGMx->filebase_P) == 0) {		// return error if no file is open
+		return (XIO_FILE_NOT_OPEN);
+	}
+	if (fgets(buf, size, &d->stream) == NULL) {
+		PGMx->filebase_P = NULL;
+//		clearerr(&PGM.file);
+		clearerr(&d->stream);
+		return (XIO_EOF);
+	}
+	return (XIO_OK);
 }

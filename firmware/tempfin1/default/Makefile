@@ -40,7 +40,7 @@ HEX_EEPROM_FLAGS += --change-section-lma .eeprom=0 --no-change-warnings
 LIBS = -lprintf_flt -lm 
 
 ## Objects that must be built in order to link
-OBJECTS = util.o kinen.o report.o main.o xio.o xio_usart.o system.o controller.o xio_spi.o heater.o sensor.o config.o json_parser.o 
+OBJECTS = util.o kinen.o report.o main.o xio.o xio_usart.o system.o controller.o xio_spi.o heater.o sensor.o config.o json_parser.o xio_file.o 
 
 ## Objects explicitly added by the user
 LINKONLYOBJECTS = 
@@ -86,6 +86,9 @@ config.o: ../config.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 json_parser.o: ../json_parser.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+xio_file.o: ../xio/xio_file.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 ##Link

@@ -17,7 +17,7 @@
 #ifndef tempfin1_h
 #define tempfin1_h
 
-#define BUILD_NUMBER 		006.02			// Adding in config subsystem and JSON
+#define BUILD_NUMBER 		006.03			// Adding in config subsystem and JSON
 #define VERSION_NUMBER		0.1				// firmware major version
 #define HARDWARE_VERSION	0.1				// board revision number
 

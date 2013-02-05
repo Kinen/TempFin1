@@ -2,22 +2,9 @@
  * xio_file.h	- device driver for file-type devices
  *   			- works with avr-gcc stdio library
  *
- * Part of TinyG project
+ * Part of Kinen project
  *
  * Copyright (c) 2011 - 2013 Alden S. Hart Jr.
- *
- * TinyG is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by 
- * the Free Software Foundation, either version 3 of the License, 
- * or (at your option) any later version.
- *
- * TinyG is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of 
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the GNU General Public License for details.
- *
- * You should have received a copy of the GNU General Public License 
- * along with TinyG  If not, see <http://www.gnu.org/licenses/>.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -65,38 +52,33 @@
 #ifndef xio_file_h
 #define xio_file_h
 
-#define PGMFILE (const PROGMEM char *)		// extends pgmspace.h
+/******************************************************************************
+ * FILE DEVICE CONFIGS AND STRUCTURES
+ ******************************************************************************/
 
-/* 
- * FILE DEVICE CONFIGS 
- */
-
+#define PGMFILE (const PROGMEM char *)	// extends pgmspace.h
 #define PGM_FLAGS (XIO_BLOCK | XIO_CRLF | XIO_LINEMODE)
-#define PGM_ADDR_MAX (0x4000)		// 16K
+#define PGM_ADDR_MAX (0x4000)			// 16K
 
 /* 
  * FILE device extended control structure 
  * Note: As defined this struct won't do files larger than 65,535 chars
- * Note: As defined this struct won't do files larger than 4 Gbytes chars
  */
-
-// file-type device control struct
 typedef struct xioFILE {
 	uint32_t rd_offset;					// read index into file
 	uint32_t wr_offset;					// write index into file
 	uint32_t max_offset;				// max size of file
 	const char * filebase_P;			// base location in program memory (PROGMEM)
-} xioFile;
+} xioFile_t;
 
-/* 
- * FILE DEVICE FUNCTION PROTOTYPES
- */
-void xio_init_file(void);
-FILE *xio_open_file(const uint8_t dev, const char *addr, const flags_t flags);
-int xio_gets_pgm(xioDev_t *d, char *buf, const int size);			// read string from program memory
-int xio_getc_pgm(FILE *stream);									// get a character from PROGMEM
-int xio_putc_pgm(const char c, FILE *stream);					// always returns ERROR
+/******************************************************************************
+ * FILE CLASS AND DEVICE FUNCTION PROTOTYPES AND ALIASES
+ ******************************************************************************/
 
-// SD Card functions
+xioDev_t *xio_init_file(uint8_t dev);
+FILE *xio_open_pgm(const uint8_t dev, const char *addr, const flags_t flags);
+int xio_gets_pgm(xioDev_t *d, char *buf, const int size);	// read string from program memory
+int xio_getc_pgm(FILE *stream);								// get a character from PROGMEM
+int xio_putc_pgm(const char c, FILE *stream);				// always returns ERROR
 
 #endif
