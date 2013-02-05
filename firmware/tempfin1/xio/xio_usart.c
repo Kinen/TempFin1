@@ -1,23 +1,9 @@
 /*
  * xio_usart.c	- General purpose USART device driver for xmega family
  * 				- works with avr-gcc stdio library
- *
- * Part of TinyG project
+ * Part of Kinen project
  *
  * Copyright (c) 2010 - 2013 Alden S. Hart Jr.
- *
- * TinyG is free software: you can redistribute it and/or modify it 
- * under the terms of the GNU General Public License as published by 
- * the Free Software Foundation, either version 3 of the License, 
- * or (at your option) any later version.
- *
- * TinyG is distributed in the hope that it will be useful, but 
- * WITHOUT ANY WARRANTY; without even the implied warranty of 
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the GNU General Public License for details.
- *
- * You should have received a copy of the GNU General Public License 
- * along with TinyG  If not, see <http://www.gnu.org/licenses/>.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -30,11 +16,11 @@
 #include <stdio.h>					// precursor for xio.h
 #include <stdbool.h>				// true and false
 #include <avr/interrupt.h>
-#include "xio.h"					// includes for all devices are in here
+#include "xio.h"					// nested includes for all devices and types
 
 // allocate and initialize USART structs
-xioUsartRX_t usart_rx = { USART_RX_BUFFER_SIZE-1,1,1 };
-xioUsartTX_t usart_tx = { USART_TX_BUFFER_SIZE-1,1,1 };
+xioUsartRX_t usart0_rx = { USART_RX_BUFFER_SIZE-1,1,1 };
+xioUsartTX_t usart0_tx = { USART_TX_BUFFER_SIZE-1,1,1 };
 xioDev_t usart0 = {
 		XIO_DEV_USART,
 		xio_open_usart,
@@ -43,13 +29,15 @@ xioDev_t usart0 = {
 		xio_getc_usart,
 		xio_putc_usart,
 		xio_null,
-		(xioBuf_t *)&usart_rx,
-		(xioBuf_t *)&usart_tx,		// unnecessary to initialize the rest of the struct 
+		(xioBuf_t *)&usart0_rx,
+		(xioBuf_t *)&usart0_tx,		// unnecessary to initialize the rest of the struct 
 };
 
 // Fast accessors
-#define USARTrx ds[XIO_DEV_USART]->rx
-#define USARTtx ds[XIO_DEV_USART]->tx
+//#define USARTrx ds[XIO_DEV_USART]->rx	// these compile to static references
+//#define USARTtx ds[XIO_DEV_USART]->tx
+#define USART0rx usart0.rx			// these compile to static references
+#define USART0tx usart0.tx
 
 /*
  *	xio_init_usart() - general purpose USART initialization (shared)
@@ -63,32 +51,26 @@ xioDev_t *xio_init_usart(uint8_t dev)
 
 /*
  *	xio_open_usart() - general purpose USART open
- *	xio_set_baud_usart() - baud rate setting routine
- *
- *	The open() function assumes that init() has been run previously
+ *	open() assumes that init() has been run previously
  */
 FILE *xio_open_usart(const uint8_t dev, const char *addr, const flags_t flags)
 {
-	xioDev_t *d = ds[dev];						// convenience device struct pointer
-	xio_reset_working_flags(d);
-	xio_ctrl_device(d, flags);					// setup control flags
-	d->rx->wr = 1;								// can't use location 0 in circular buffer
-	d->rx->rd = 1;
-	d->tx->wr = 1;
-	d->tx->rd = 1;
+	xioDev_t *d = ds[dev];			// convenience device struct pointer
+	xio_reset_device(d, flags);
 
 	// setup the hardware
-	PRR &= ~PRUSART0_bm;		// Enable the USART in the power reduction register (system.h)
+	PRR &= ~PRUSART0_bm;			// Enable the USART in the power reduction register (system.h)
 	UCSR0A = USART_BAUD_DOUBLER;
 	UCSR0B = USART_ENABLE_FLAGS;
 	xio_set_baud_usart(d, USART_BAUD_RATE);
 
-	// setup stdio stream structure
-	fdev_setup_stream(&d->file, d->x_putc, d->x_getc, _FDEV_SETUP_RW);
-	fdev_set_udata(&d->file, d);		// reference yourself for udata 
-	return (&d->file);								// return stdio FILE reference
+	return (&d->stream);			// return stdio FILE reference
 }
 
+/* 
+ * xio_set_baud_usart() - baud rate setting routine
+ * Broken out so it can be exposed to the config system
+ */
 void xio_set_baud_usart(xioDev_t *d, const uint32_t baud)
 {
 	UBRR0 = (F_CPU / (8 * baud)) - 1;
@@ -102,17 +84,17 @@ void xio_set_baud_usart(xioDev_t *d, const uint32_t baud)
 int xio_putc_usart(const char c, FILE *stream)
 {
 	int status = xio_write_buffer(((xioDev_t *)stream->udata)->tx, c);
-	UCSR0B |= (1<<UDRIE0); 	// enable TX interrupts - they will keep firing
+	UCSR0B |= (1<<UDRIE0); 		// enable TX interrupts - they will keep firing
 	return (status);
 }
 
 ISR(USART_UDRE_vect)
 {
-	int c = xio_read_buffer(USARTtx);
+	int c = xio_read_buffer(USART0tx);
 	if (c == _FDEV_ERR) {
-		UCSR0B &= ~(1<<UDRIE0); 	// disable interrupts
+		UCSR0B &= ~(1<<UDRIE0); // disable interrupts
 	} else {
-		UDR0 = (char)c;				// write char to USART xmit register
+		UDR0 = (char)c;			// write char to USART xmit register
 	}
 }
 
@@ -121,10 +103,9 @@ ISR(USART_UDRE_vect)
  *  USART RX ISR() - This function is hard-wired for the atmega328p config
  *
  *	Compatible with stdio system - may be bound to a FILE handle
+ *	This version is non-blocking. To add blocking behaviors use the alternate code
  *
- *  Get next character from RX buffer.
- *
- *  BLOCKING behaviors
+ *  BLOCKING behavioir
  *	 	- execute blocking or non-blocking read depending on controls
  *		- return character or -1 & XIO_SIG_WOULDBLOCK if non-blocking
  *		- return character or sleep() if blocking
@@ -136,60 +117,33 @@ ISR(USART_UDRE_vect)
  */
 ISR(USART_RX_vect) 
 { 
-	xio_write_buffer(USARTrx, UDR0);
+	xio_write_buffer(USART0rx, UDR0);
 }
 
 int xio_getc_usart(FILE *stream)
 {
-	char c = xio_read_buffer(((xioDev_t *)stream->udata)->rx);
+	// non-blocking version - returns _FDEV_ERR if no char available
 	xioDev_t *d = (xioDev_t *)stream->udata;		// get device struct pointer
-	d->x_flow(d);									// run the flow control function (USB only)
-	if (d->flag_echo) d->x_putc(c, stdout);			// conditional echo regardless of character
+	int c = xio_read_buffer(d->rx);
+	d->x_flow(d);									// run the flow control function callback
+	if (d->flag_echo) { d->x_putc(c, stdout);}		// conditional echo 
 	if ((c == CR) || (c == LF)) { if (d->flag_linemode) { return('\n');}}
 	return (c);
-}
 
-/* 
- *	xio_gets_usart() - read a complete line from the usart device
- *
- *	Retains line context across calls - so it can be called multiple times.
- *	Reads as many characters as it can until any of the following is true:
- *
- *	  - RX buffer is empty on entry (return XIO_EAGAIN)
- *	  - no more chars to read from RX buffer (return XIO_EAGAIN)
- *	  - read would cause output buffer overflow (return XIO_BUFFER_FULL)
- *	  - read returns complete line (returns XIO_OK)
- *
- *	Note: LINEMODE flag in device struct is ignored. It's ALWAYS LINEMODE here.
- *	Note: This function assumes ignore CR and ignore LF handled upstream before the RX buffer
- */
-/*
-int xio_gets_usart(xioDev_t *d, char *buf, const int size)
-{
-	char c_out;
+/* blocking version - requires #include <avr/sleep.h>
+	xioDev_t *d = (xioDev_t *)stream->udata;		// get device struct pointer
+	int c;
+	while ((c = xio_read_buffer(d->rx)) == _FDEV_ERR) { sleep_mode();}
+//	...or just this:
+	while ((c = xio_read_buffer(d->rx)) == _FDEV_ERR);
 
-	// first time thru initializations
-	if (d->flag_in_line == false) {
-		d->flag_in_line = true;					// yes, we are busy getting a line
-		d->buf = buf;							// bind the output buffer
-		d->len = 0;								// zero the buffer count
-		d->size = size;							// set the max size of the message
-	}
-	while (true) {
-		if (d->len >= (d->size)-1) {			// size is total count - aka 'num' in fgets()
-			d->buf[d->size] = NUL;				// string termination preserves latest char
-			return (XIO_BUFFER_FULL);
-		}
-		if ((c_out = xio_read_buffer(d->rx)) == _FDEV_ERR) { return (XIO_EAGAIN);}
-		if (c_out == LF) {
-			d->buf[(d->len)++] = NUL;
-			d->flag_in_line = false;			// clear in-line state (reset)
-			return (XIO_OK);					// return for end-of-line
-		}
-		d->buf[(d->len)++] = c_out;				// write character to buffer
-	}
-}
+	d->x_flow(d);									// run the flow control function callback
+	if (d->flag_echo) { d->x_putc(c, stdout);}		// conditional echo 
+	if ((c == CR) || (c == LF)) { if (d->flag_linemode) { return('\n');}}
+	return (c);
 */
+}
+
 /* Fakeout routines for testing
  *
  *	xio_queue_RX_string_usart() - fake ISR to put a string in the RX buffer
@@ -198,7 +152,7 @@ int xio_gets_usart(xioDev_t *d, char *buf, const int size)
  *	String must be NUL terminated but doesn't require a CR or LF
  *	Also has wrappers for USB and RS485
  */
- /*
+/*
 void xio_queue_RX_string_usart(const uint8_t dev, const char *buf)
 {
 	uint8_t i=0;

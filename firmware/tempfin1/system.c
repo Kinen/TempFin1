@@ -76,7 +76,6 @@ uint16_t adc_read()
 	return (ADC);
 }
 
-
 /**** PWM - Pulse Width Modulation Functions ****/
 /*
  * pwm_init() - initialize RTC timers and data
@@ -163,7 +162,6 @@ uint8_t pwm_set_duty(double duty)
  * tick_100ms()	  - tasks that run every 100 ms
  * tick_1sec()	  - tasks that run every 100 ms
  */
-
 void tick_init(void)
 {
 	PRR &= ~PRTIM0_bm;				// Enable Timer0 in the power reduction register (system.h)
@@ -222,14 +220,12 @@ void tick_1sec(void)			// 1 second callout
 //	led_toggle();
 }
 
-
 /**** LED Functions ****
  * led_init()
  * led_on()
  * led_off()
  * led_toggle()
  */
-
 void led_init()
 {
 	DDRD |= PWM_OUTB;			// set PWM bit to output
@@ -254,5 +250,3 @@ void led_toggle(void)
 		led_off();
 	}
 }
-
-

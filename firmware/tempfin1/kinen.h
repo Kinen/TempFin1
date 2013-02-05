@@ -18,19 +18,27 @@
 #ifndef kinen_h
 #define kinen_h
 
+// Kinen definitions and structs
+
+#define INPUT_BUFFER_LEN 128
+#define OUTPUT_BUFFER_LEN 128
+
+typedef struct kinenSingleton {		// main kinen control struct
+//	double version;					// kinen version number
+//	double build;					// kinen build number
+	double null;					// dumping ground for items with no target
+	uint8_t src;					// active source device
+	uint8_t default_src;			// default source device
+	uint8_t linelen;				// length of currently processing line
+//	uint8_t led_state;				// 0=off, 1=on
+//	int32_t led_counter;			// a convenience for flashing an LED
+	char in_buf[INPUT_BUFFER_LEN];	// input text buffer
+	char out_buf[OUTPUT_BUFFER_LEN];// output text buffer
+} kinenSingleton_t;
+kinenSingleton_t kc;				// allocate kinen controller structure
+
 // function prototypes
 void kinen_init(void);
-
-
-// Kinen definitions
-
-// Kinen Device Types	(this might be best in a separate kinen_defs.h file)
-
-#define DEVICE_TYPE_NULL 0
-#define DEVICE_TYPE_DUMB_STEPPER_CONTROLLER 1
-#define DEVICE_TYPE_SMART_STEPPER_CONTROLLER 2
-#define DEVICE_TYPE_EXTRUDER_CONTROLLER 3
-#define DEVICE_TYPE_TEMPERATURE_CONTROLLER 4
 
 // Status Codes
 
@@ -47,7 +55,7 @@ void kinen_init(void);
 #define	SC_FILE_SIZE_EXCEEDED 10
 #define	SC_NO_SUCH_DEVICE 11
 #define	SC_BUFFER_EMPTY 12
-#define	SC_BUFFER_FULL_FATAL 13 
+#define	SC_BUFFER_FULL 13 
 #define	SC_BUFFER_FULL_NON_FATAL 14
 
 // System errors (HTTP 500's if you will)

@@ -57,33 +57,31 @@
  *		transfers. Presumably the master would stop polling once it receives an ETX 
  *		from the slave.
  */
-#include <stdio.h>						// precursor for xio.h
-#include <stdbool.h>					// true and false
-#include <string.h>						// for memset
-#include <avr/pgmspace.h>				// precursor for xio.h
+#include <stdio.h>					// precursor for xio.h
+#include <stdbool.h>				// true and false
 #include <avr/interrupt.h>
-#include <avr/sleep.h>					// needed for blocking TX
-
-#include "xio.h"						// includes for all devices are in here
+#include "xio.h"					// nested includes for all devices and types
 
 // allocate and initialize SPI structs
-xioSpiRX_t spi_rx = { SPI_RX_BUFFER_SIZE-1,1,1 };
-xioSpiTX_t spi_tx = { SPI_TX_BUFFER_SIZE-1,1,1 };
+xioSpiRX_t spi0_rx = { SPI_RX_BUFFER_SIZE-1,1,1 };
+xioSpiTX_t spi0_tx = { SPI_TX_BUFFER_SIZE-1,1,1 };
 xioDev_t spi0 = {
 		XIO_DEV_SPI,
 		xio_open_spi,
-		xio_ctrl_device,
-		xio_gets_spi,					// change to xio_gets_device
-		xio_getc_spi,
-		xio_putc_spi,
+		xio_ctrl_device,				// use device generic function
+		xio_gets_device,				// " "
+		xio_getc_device,				// " "
+		xio_putc_device,				// " "
 		xio_null,
-		(xioBuf_t *)&spi_rx,
-		(xioBuf_t *)&spi_tx,			// unecessary to initialize from here on...
+		(xioBuf_t *)&spi0_rx,
+		(xioBuf_t *)&spi0_tx,			// unecessary to initialize from here on...
 };
 
 // Fast accessors
-#define SPIrx ds[XIO_DEV_SPI]->rx
-#define SPItx ds[XIO_DEV_SPI]->tx
+//#define SPIrx ds[XIO_DEV_SPI]->rx		// these compile to static references
+//#define SPItx ds[XIO_DEV_SPI]->tx
+#define SPI0rx spi0.rx					// these compile to static references
+#define SPI0tx spi0.tx
 
 /*
  *	xio_init_spi() - general purpose SPI initialization (shared)
@@ -100,23 +98,15 @@ xioDev_t *xio_init_spi(uint8_t dev)
  */
 FILE *xio_open_spi(const uint8_t dev, const char *addr, const flags_t flags)
 {
-	xioDev_t *d = ds[dev];						// convenience device struct pointer
-	xio_reset_working_flags(d);
-	xio_ctrl_device(d, flags);					// setup control flags
-	d->rx->wr = 1;								// can't use location 0 in circular buffer
-	d->rx->rd = 1;
-	d->tx->wr = 1;
-	d->tx->rd = 1;
+	xioDev_t *d = ds[dev];			// convenience device struct pointer
+	xio_reset_device(d, flags);
 
 	// setup the SPI hardware device
-	PRR &= ~PRSPI_bm;							// Enable SPI in power reduction register (system.h)
+	PRR &= ~PRSPI_bm;				// Enable SPI in power reduction register (system.h)
 	SPCR |= SPI_MODE;
 	DDRB |= SPI_OUTBITS;
 
-	// setup stdio stream structure
-	fdev_setup_stream(&d->file, d->x_putc, d->x_getc, _FDEV_SETUP_RW);
-	fdev_set_udata(&d->file, d);				// reference yourself for udata 
-	return (&d->file);							// return stdio FILE reference
+	return (&d->stream);			// return stdio FILE reference
 }
 
 /*
@@ -124,6 +114,7 @@ FILE *xio_open_spi(const uint8_t dev, const char *addr, const flags_t flags)
  * xio_putc_spi() - Write a character into the TX buffer for MISO piggyback transmission
  * SPI Slave Interrupt() - interrupts on RX byte received
  */
+ /*
 int xio_getc_spi(FILE *stream)
 {
 	return (xio_read_buffer(((xioDev_t *)stream->udata)->rx));
@@ -133,32 +124,32 @@ int xio_putc_spi(const char c, FILE *stream)
 {
 	return (xio_write_buffer(((xioDev_t *)stream->udata)->tx, c));
 }
-
+*/
 ISR(SPI_STC_vect)
 {
 	char c = SPDR;								// read the incoming character; save it
-	int c_out = xio_read_buffer(SPItx); 		// stage the next char to transmit on MISO from the TX buffer
+	int c_out = xio_read_buffer(SPI0tx); 		// stage the next char to transmit on MISO from the TX buffer
 	if (c_out ==_FDEV_ERR) SPDR = ETX; else SPDR = (char)c_out;	// stage next TX char or ETX if none	
-	xio_write_buffer(SPIrx, c);					// write incoming char into RX buffer
+	xio_write_buffer(SPI0rx, c);				// write incoming char into RX buffer
 
 //	char c = SPDR;									// read the incoming character; save it
-//	if (SPIrx->head == SPIrx->tail) { SPDR = NAK;}	// RX buffer is full. - send NAK to master
-//	if (SPItx->head == SPItx->tail) { SPDR = ETX;}	// TX buffer is empty - send ETX to master
-//	if ((--(SPItx->tail)) == 0) { SPItx->tail = SPItx->size;}	// advance tail with wrap
-//	SPDR = (SPItx->buf[SPItx->tail]);			// get character from TX buffer
-//	xio_write_buffer(SPIrx, c);					// write received char to RX buffer
+//	if (SPI0rx->head == SPI0rx->tail) { SPDR = NAK;}	// RX buffer is full. - send NAK to master
+//	if (SPI0tx->head == SPI0tx->tail) { SPDR = ETX;}	// TX buffer is empty - send ETX to master
+//	if ((--(SPI0tx->tail)) == 0) { SPI0tx->tail = SPI0tx->size;}	// advance tail with wrap
+//	SPDR = (SPI0tx->buf[SPI0tx->tail]);				// get character from TX buffer
+//	xio_write_buffer(SPI0rx, c);					// write received char to RX buffer
 
-//	int c_out = xio_read_buffer(SPItx); 		// stage the next char to transmit on MISO from the TX buffer
+//	int c_out = xio_read_buffer(SPI0tx); 		// stage the next char to transmit on MISO from the TX buffer
 //	if (c_out ==_FDEV_ERR) { c_out = ETX;}
 //	char c = SPDR;								// read the incoming character; save it
 //	SPDR = c_out;
-//	xio_write_buffer(SPIrx, c);					// write incoming char into RX buffer
+//	xio_write_buffer(SPI0rx, c);				// write incoming char into RX buffer
 
 //	char c = SPDR;								// read the incoming character; save it
-//	if (SPItx->head == SPItx->tail) { SPDR = ETX;}
-//	if ((--(SPItx->tail)) == 0) { SPItx->tail = SPItx->size;}	// advance tail with wrap
-//	SPDR = SPItx->buf[SPItx->tail];				// stage the character from TX buffer
-//	xio_write_buffer(SPIrx, c);					// write incoming char into RX buffer
+//	if (SPI0tx->head == SPI0tx->tail) { SPDR = ETX;}
+//	if ((--(SPI0tx->tail)) == 0) { SPI0tx->tail = SPI0tx->size;}	// advance tail with wrap
+//	SPDR = SPI0tx->buf[SPI0tx->tail];				// stage the character from TX buffer
+//	xio_write_buffer(SPI0rx, c);					// write incoming char into RX buffer
 }
 
 /* 
@@ -178,7 +169,7 @@ ISR(SPI_STC_vect)
  *	Note: LINEMODE flag in device struct is ignored. It's ALWAYS LINEMODE here.
  *	Note: CRs are not recognized as NL chars - master must send LF to terminate a line
  */
-
+/*
 int xio_gets_spi(xioDev_t *d, char *buf, const int size)
 {
 	int c;
@@ -205,4 +196,5 @@ int xio_gets_spi(xioDev_t *d, char *buf, const int size)
 		d->buf[d->len++] = c;					// write character to output buffer
 	}
 }
+*/
 

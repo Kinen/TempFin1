@@ -15,7 +15,7 @@ COMMON = -mmcu=$(MCU)
 
 ## Compile options common for all C compilation units.
 CFLAGS = $(COMMON)
-CFLAGS += -Wall -gdwarf-2 -std=gnu99                    -DF_CPU=16000000UL -O0 -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
+CFLAGS += -Wall -gdwarf-2 -std=gnu99                      -DF_CPU=16000000UL -Os -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 CFLAGS += -MD -MP -MT $(*F).o -MF dep/$(@F).d 
 
 ## Assembly specific flags
@@ -40,7 +40,7 @@ HEX_EEPROM_FLAGS += --change-section-lma .eeprom=0 --no-change-warnings
 LIBS = -lprintf_flt -lm 
 
 ## Objects that must be built in order to link
-OBJECTS = util.o kinen.o report.o main.o xio.o xio_usart.o system.o controller.o xio_spi.o heater.o sensor.o 
+OBJECTS = util.o kinen.o report.o main.o xio.o xio_usart.o system.o controller.o xio_spi.o heater.o sensor.o config.o json_parser.o 
 
 ## Objects explicitly added by the user
 LINKONLYOBJECTS = 
@@ -80,6 +80,12 @@ heater.o: ../heater.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 sensor.o: ../sensor.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+config.o: ../config.c
+	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
+
+json_parser.o: ../json_parser.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c  $<
 
 ##Link

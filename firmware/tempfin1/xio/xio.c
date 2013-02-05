@@ -68,15 +68,15 @@
  * The stdio compatible functions use pointers to the stdio FILE structs.
  */
 
-#include <string.h>					// for memset()
+//#include <string.h>					// for memset()
 #include <stdbool.h>
 #include <stdio.h>					// precursor for xio.h
 #include <avr/pgmspace.h>			// precursor for xio.h
 
 #include "xio.h"					// all device sub-system includes are nested here
 
-/* 
- * PUBLIC ENTRY POINTS - access functions via the XIO_DEV number
+/***********************************************************************************
+ * PUBLIC ENTRY POINTS - access functions via the XIO_DEV device number
  * xio_open() 		- open device for use or re-use
  * xio_gets() 		- non-blocking get line function
  * xio_getc() 		- getc (not stdio compatible)
@@ -93,23 +93,23 @@
  */
 FILE *xio_open(uint8_t dev, const char *addr, flags_t flags) { return (ds[dev]->x_open(dev, addr, flags));}
 int xio_gets(const uint8_t dev, char *buf, const int size) { return (ds[dev]->x_gets(ds[dev], buf, size));}
-int xio_getc(const uint8_t dev) { return (ds[dev]->x_getc(&(ds[dev]->file)));}
-int xio_putc(const uint8_t dev, const char c) { return (ds[dev]->x_putc(c, &(ds[dev]->file)));}
+int xio_getc(const uint8_t dev) { return (ds[dev]->x_getc(&(ds[dev]->stream)));}
+int xio_putc(const uint8_t dev, const char c) { return (ds[dev]->x_putc(c, &(ds[dev]->stream)));}
 int xio_ctrl(const uint8_t dev, const flags_t flags) { return (xio_ctrl_device(ds[dev], flags));}
 int xio_set_baud(const uint8_t dev, const uint8_t baud) { xio_set_baud_usart(ds[dev], baud); return (XIO_OK);}
-void xio_set_stdin(const uint8_t dev)  { stdin  = &(ds[dev]->file); }
-void xio_set_stdout(const uint8_t dev) { stdout = &(ds[dev]->file); }
-void xio_set_stderr(const uint8_t dev) { stderr = &(ds[dev]->file); }
+void xio_set_stdin(const uint8_t dev)  { stdin  = &(ds[dev]->stream);}
+void xio_set_stdout(const uint8_t dev) { stdout = &(ds[dev]->stream);}
+void xio_set_stderr(const uint8_t dev) { stderr = &(ds[dev]->stream);}
 
-/*
- * xio_init() - initialize entire xio sub-system
- * xio_reset_working_flags()
- * xio_null() - xio null function
+/***********************************************************************************
+ * xio_init() 			- initialize entire xio sub-system
+ * xio_reset_device()	- common function used by opens()
+ * xio_ctrl_device() 	- set control-flags
+ * xio_null() 			- xio null function
  */
 void xio_init()
 {
-	// device constructors and registration in device control array
-
+	// run device constructors and register devices in dev array
 	ds[XIO_DEV_USART] = xio_init_usart(XIO_DEV_USART);
 	ds[XIO_DEV_SPI]   = xio_init_spi(XIO_DEV_SPI);
 //	ds[XIO_DEV_FILE]  = xio_init_file(XIO_DEV_FILE);
@@ -124,17 +124,29 @@ void xio_init()
 	xio_set_stderr(XIO_DEV_SPI);
 }
 
-void xio_reset_working_flags(xioDev_t *d)
+void xio_reset_device(xioDev_t *d,  const flags_t flags)
 {
-	d->flag_in_line = 0;
+	if (d->rx != NULL) {			// don't write on a wild pointer
+		d->rx->wr = 1;				// can't use location 0 in circular buffer
+		d->rx->rd = 1;
+	}
+	if (d->tx != NULL) {
+		d->tx->wr = 1;
+		d->tx->rd = 1;
+	}
+	d->flag_in_line = 0;			// reset the working flags
 	d->flag_eol = 0;
 	d->flag_eof = 0;
+
+	xio_ctrl_device(d, flags);		// setup control flags
+
+	// setup stdio stream structure
+	fdev_setup_stream(&d->stream, d->x_putc, d->x_getc, _FDEV_SETUP_RW);
+	fdev_set_udata(&d->stream, d);	// reference yourself for udata 
 }
+
 void xio_null(xioDev_t *d) { return;}
 
-/*
- * xio_ctrl_device() - PRIVATE set control-flags
- */
 #define SETFLAG(t,f) if ((flags & t) != 0) { d->f = true; }
 #define CLRFLAG(t,f) if ((flags & t) != 0) { d->f = false; }
 
@@ -160,11 +172,10 @@ int xio_ctrl_device(xioDev_t *d, const flags_t flags)
 	return (XIO_OK);
 }
 
-/* 
+/* Generic getc() putc() - these are typically subclassed at the type level
  *	xio_getc_device() - get a character from the device 
  *	xio_putc_device() - write a character to the device 
  */
-/*
 int xio_getc_device(FILE *stream)
 {
 	return (xio_read_buffer(((xioDev_t *)stream->udata)->rx));
@@ -174,7 +185,7 @@ int xio_putc_device(const char c, FILE *stream)
 {
 	return (xio_write_buffer(((xioDev_t *)stream->udata)->tx, c));
 }
-*/
+
 /* 
  *	xio_gets_device() - read a complete line (message) from a device
  *
@@ -194,7 +205,7 @@ int xio_putc_device(const char c, FILE *stream)
  */
 int xio_gets_device(xioDev_t *d, char *buf, const int size)
 {
-	char c_out;
+	int c_out;
 
 	// first time thru initializations
 	if (d->flag_in_line == false) {
@@ -220,25 +231,29 @@ int xio_gets_device(xioDev_t *d, char *buf, const int size)
 
 /* 
  * Buffer read and write primitives
- * You can make these blocking routines by calling them in an infinite while()
- * waiting for something other than _FDEV_ERR to be returned.
+ *
+ * 	You can make these blocking routines by calling them in a while(true)
+ * 	while waiting for something other than _FDEV_ERR to be returned. 
+ *	Of course, this only works if some interrupt is loading things behind
+ *	the scenes.
  */
-
-int xio_read_buffer(xioBuf_t *b) 
+//int xio_read_buffer(xioBuf_t *b) 
+int8_t xio_read_buffer(xioBuf_t *b) 
 {
 	if (b->wr == b->rd) { return (_FDEV_ERR);}	// return if queue empty
 	if ((--(b->rd)) == 0) { b->rd = b->size;}	// advance tail with wrap
 	return (b->buf[b->rd]);						// return character from buffer
-}												// leave rd on returned char
+}												// leave rd on *returned* char
 
-int xio_write_buffer(xioBuf_t *b, char c) 
+//int xio_write_buffer(xioBuf_t *b, char c) 
+int8_t xio_write_buffer(xioBuf_t *b, char c) 
 {
-	buffer_t next_wr = b->wr-1;					// pre-advance head to temporary variable
-	if (next_wr == 0) { next_wr = b->size;}		// advance head with wrap
+	buffer_t next_wr = b->wr-1;					// pre-advance wr to temporary variable
+	if (next_wr == 0) { next_wr = b->size;}		// advance wr with wrap
 	if (next_wr == b->rd) { return (_FDEV_ERR);}// return if queue full
 	b->buf[next_wr] = c;						// write char to buffer
-	b->wr = next_wr;							// advance head from temp
-	return (XIO_OK);							// leave head on written char
+	b->wr = next_wr;							// advance wr from temp value
+	return (XIO_OK);							// leave wr on *written* char
 }
 
 /******************************************************************************
@@ -259,7 +274,7 @@ char sequence[8] = {"01234567"};
 
 void xio_unit_tests()
 {
-//	_transmit_test(XIO_DEV_USART);			// never returns
+	_transmit_test(XIO_DEV_USART);			// never returns
 //	_loopback_test(XIO_DEV_USART);			// never returns
 //	_loopfake_test(XIO_DEV_USART);			// never returns
 
@@ -270,6 +285,8 @@ void xio_unit_tests()
 static void _transmit_test(uint8_t dev)		// never returns
 {
 //	while (true) { xio_putc(dev, '5');}
+
+	c = xio_getc(dev);
 
 	uint8_t i = 0;
 	while (true) {
@@ -331,16 +348,3 @@ void _pgm_read_test()
 */
 #endif // __UNIT_TESTS
 
-/*
-//	buffer_t next_tail = b->tail-1;						// pre-advance
-//	if (next_tail == 0) { next_tail = b->size;}
-//	if (b->head == b->tail) { return (_FDEV_ERR);}		// queue empty
-//	b->tail = next_tail;
-//	return (b->buf[next_tail]);
-
-//	if (b->head == b->tail) { return (_FDEV_ERR);}		// queue empty
-//	int c = b->buf[b->tail];
-//	if ((--(b->tail)) == 0) { b->tail = b->size;}		// post-advance
-//	return (c);
-
-*/

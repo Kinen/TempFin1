@@ -18,25 +18,31 @@
  */
 
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <avr/interrupt.h>
 
 //#include <avr/pgmspace.h>
 //#include <math.h>
-//#include <string.h>				// for memset
 //#include <avr/io.h>
+//#include <string.h>				// for memset
 
-#include "system.h"
 #include "kinen.h"
 #include "tempfin1.h"
+#include "system.h"
+#include "heater.h"
+#include "sensor.h"
 #include "report.h"
+#include "config.h"
+#include "json_parser.h"
 #include "util.h"
 #include "xio/xio.h"
 
 // local functions
 
 static void _controller(void);
+static uint8_t _dispatch(void);
 static void _unit_tests(void);
 
 // Had to move the struct definitions and declarations to .h file for reporting purposes
@@ -50,32 +56,57 @@ static void _unit_tests(void);
 int main(void)
 {
 	cli();
-
-	// system-level inits
+								// system-level inits
 	sys_init();					// do this first
 	xio_init();					// do this second
 	kinen_init();				// do this third
 
-	// init system devices
-//	adc_init(ADC_CHANNEL);
-//	pwm_init();
-//	tick_init();
+	adc_init(ADC_CHANNEL);		// init system devices
+	pwm_init();
+	tick_init();
 	led_init();
 
 	// application level inits
-//	heater_init();				// setup the heater module and subordinate functions
-//	sensor_init();
+	heater_init();				// setup the heater module and subordinate functions
+	sensor_init();
 	sei(); 						// enable interrupts
 	rpt_initialized();			// send initalization string
 
 	_unit_tests();				// run any unit tests that are enabled
 
-	// main loop
-	while (true) {
+	while (true) {				// main loop
 		_controller();
 	}
 	return (false);				// never returns
 }
+
+/*
+ *	_controller()
+ *	_dispatch()
+ *
+ *	The controller/dispatch loop is a set of pre-registered callbacks that (in effect)
+ *	provide rudimentry multi-threading. Functions are organized from highest priority 
+ *	to lowest priority. Each called function must return a status code (see kinen.h). 
+ *	If SC_EAGAIN (02) is returned the loop restarts at the beginning of the list. 
+ *	For any other status code exceution continues down the list.
+ */
+#define	RUN(func) if (func == SC_EAGAIN) return; 
+static void _controller()
+{
+	RUN(tick_callback());		// regular interval timer clock handler (ticks)
+	RUN(_dispatch());			// read and execute next incoming command
+}
+
+static uint8_t _dispatch()
+{
+	ritorno (xio_gets(kc.src, kc.in_buf, sizeof(kc.in_buf)));// read line or return if not completed
+	js_json_parser(kc.in_buf);
+	return (SC_OK);
+}
+
+/******************************************************************************
+ * TEMPERATURE FIN UNIT TESTS
+ ******************************************************************************/
 
 static void _unit_tests(void)
 {
@@ -84,26 +115,6 @@ static void _unit_tests(void)
 //	heater_on(160);				// turn heater on for testing
 }
 
-/*
- * Dispatch loop
- *
- *	The dispatch loop is a set of pre-registered callbacks that (in effect) 
- *	provide rudimentry multi-threading. Functions are organized from highest
- *	priority to lowest priority. Each called function must return a status code
- *	(see kinen_core.h). If SC_EAGAIN (02) is returned the loop restarts at the
- *	start of the list. For any other status code exceution continues down the list
- */
-
-#define	DISPATCH(func) if (func == SC_EAGAIN) return; 
-static void _controller()
-{
-//	DISPATCH(tick_callback());		// regular interval timer clock handler (ticks)
-}
-
-
-/******************************************************************************
- * TEMPERATURE FIN UNIT TESTS
- ******************************************************************************/
 
 #ifdef __TF1_UNIT_TESTS
 

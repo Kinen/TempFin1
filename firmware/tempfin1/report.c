@@ -44,7 +44,6 @@ static const char msg_hstate3[] PROGMEM = "  REGULATED";
 static PGM_P const msg_hstate[] PROGMEM = { msg_hstate0, msg_hstate1, msg_hstate2, msg_hstate3 };
 
 /*** Display routines ***/
-
 void rpt_initialized()
 {
 	printf_P(PSTR("\nDevice Initialized %1.0f\n"),42);
@@ -66,4 +65,3 @@ void rpt_readout()
 //	printf_P((PGM_P)pgm_read_word(&msg_scode[sensor.code]));
 	printf_P(PSTR("\n")); 
 }
-
