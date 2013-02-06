@@ -23,11 +23,11 @@
 
 /****** DEVELOPMENT SETTINGS ******/
 
-//#define __CANNED_STARTUP					// run any canned startup moves
+#define __CANNED_STARTUP					// run any canned startup commands
 //#define __DISABLE_PERSISTENCE				// disable EEPROM writes for faster simulation
 //#define __SUPPRESS_STARTUP_MESSAGES 		// what it says
-//#define __TF1_UNIT_TESTS					// uncomment to compile and run TempFin1 unit tests
-											// uncomment __XIO_UNIT_TESTS in xio.h if you need those
+
+void canned_startup(void);
 
 /******************************************************************************
  * DEFINE UNIT TESTS

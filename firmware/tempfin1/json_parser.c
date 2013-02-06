@@ -32,6 +32,7 @@
 
 #include <ctype.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <math.h>
 #include <string.h>					// needed for memcpy, memset
 #include <stdio.h>					// precursor for xio.h
@@ -40,7 +41,6 @@
 #include "kinen.h"
 #include "tempfin1.h"
 #include "config.h"					// JSON sits on top of the config system
-#include "controller.h"
 #include "json_parser.h"
 //#include "report.h"
 #include "util.h"

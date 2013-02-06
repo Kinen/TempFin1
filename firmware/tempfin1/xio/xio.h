@@ -193,6 +193,7 @@ int xio_gets_device(xioDev_t *d, char *buf, const int size);
 //int xio_write_buffer(xioBuf_t *b, char c);
 int8_t xio_read_buffer(xioBuf_t *b);
 int8_t xio_write_buffer(xioBuf_t *b, char c);
+void xio_queue_RX_string(const uint8_t dev, const char *buf);
 
 /*************************************************************************
  * SUPPORTING DEFINITIONS - SHOULD NOT NEED TO CHANGE

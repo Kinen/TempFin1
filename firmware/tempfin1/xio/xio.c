@@ -68,11 +68,9 @@
  * The stdio compatible functions use pointers to the stdio FILE structs.
  */
 
-//#include <string.h>					// for memset()
 #include <stdbool.h>
 #include <stdio.h>					// precursor for xio.h
 #include <avr/pgmspace.h>			// precursor for xio.h
-
 #include "xio.h"					// all device sub-system includes are nested here
 
 /***********************************************************************************
@@ -112,7 +110,7 @@ void xio_init()
 	// run device constructors and register devices in dev array
 	ds[XIO_DEV_USART] = xio_init_usart(XIO_DEV_USART);
 	ds[XIO_DEV_SPI]   = xio_init_spi(XIO_DEV_SPI);
-//	ds[XIO_DEV_FILE]  = xio_init_file(XIO_DEV_FILE);
+	ds[XIO_DEV_PGM]   = xio_init_file(XIO_DEV_PGM);
 
 	// open individual devices (file device opens occur at time-of-use)
 	xio_open(XIO_DEV_USART, NULL, USART_XIO_FLAGS);
@@ -172,7 +170,8 @@ int xio_ctrl_device(xioDev_t *d, const flags_t flags)
 	return (XIO_OK);
 }
 
-/* Generic getc() putc() - these are typically subclassed at the type level
+/* 
+ * Generic getc() putc() - these are typically subclassed at the type level
  *	xio_getc_device() - get a character from the device 
  *	xio_putc_device() - write a character to the device 
  */
@@ -221,6 +220,7 @@ int xio_gets_device(xioDev_t *d, char *buf, const int size)
 		}
 		if ((c_out = xio_read_buffer(d->rx)) == _FDEV_ERR) { return (XIO_EAGAIN);}
 		if (c_out == LF) {
+//			d->buf[(d->len)++] = LF;			// ++++++++++++++++ for diagnostics only
 			d->buf[(d->len)++] = NUL;
 			d->flag_in_line = false;			// clear in-line state (reset)
 			return (XIO_OK);					// return for end-of-line
@@ -256,6 +256,18 @@ int8_t xio_write_buffer(xioBuf_t *b, char c)
 	return (XIO_OK);							// leave wr on *written* char
 }
 
+/*
+ *	xio_queue_RX_string() - put a string in an RX buffer
+ *	String must be NUL terminated but doesn't require a CR or LF
+ */
+void xio_queue_RX_string(const uint8_t dev, const char *buf)
+{
+	uint8_t i=0;
+	while (buf[i] != NUL) {
+		xio_write_buffer(ds[dev]->rx, buf[i++]);
+	}
+}
+
 /******************************************************************************
  * XIO UNIT TESTS
  ******************************************************************************/
@@ -274,7 +286,7 @@ char sequence[8] = {"01234567"};
 
 void xio_unit_tests()
 {
-	_transmit_test(XIO_DEV_USART);			// never returns
+//	_transmit_test(XIO_DEV_USART);			// never returns
 //	_loopback_test(XIO_DEV_USART);			// never returns
 //	_loopfake_test(XIO_DEV_USART);			// never returns
 

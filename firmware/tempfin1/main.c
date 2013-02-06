@@ -23,11 +23,6 @@
 #include <stdbool.h>
 #include <avr/interrupt.h>
 
-//#include <avr/pgmspace.h>
-//#include <math.h>
-//#include <avr/io.h>
-//#include <string.h>				// for memset
-
 #include "kinen.h"
 #include "tempfin1.h"
 #include "system.h"
@@ -60,6 +55,7 @@ int main(void)
 	sys_init();					// do this first
 	xio_init();					// do this second
 	kinen_init();				// do this third
+	cfg_init();
 
 	adc_init(ADC_CHANNEL);		// init system devices
 	pwm_init();
@@ -72,7 +68,8 @@ int main(void)
 	sei(); 						// enable interrupts
 	rpt_initialized();			// send initalization string
 
-	_unit_tests();				// run any unit tests that are enabled
+//	_unit_tests();				// run any unit tests that are enabled
+	canned_startup();
 
 	while (true) {				// main loop
 		_controller();
@@ -102,6 +99,33 @@ static uint8_t _dispatch()
 	ritorno (xio_gets(kc.src, kc.in_buf, sizeof(kc.in_buf)));// read line or return if not completed
 	js_json_parser(kc.in_buf);
 	return (SC_OK);
+
+//	if ((status = xio_gets(kc.src, kc.in_buf, sizeof(kc.in_buf))) != SC_OK) {
+//		if (status == SC_EOF) {					// EOF can come from file devices only
+//			fprintf_P(stderr, PSTR("End of command file\n"));
+//			tg_reset_source();					// reset to default source
+//		}
+//		// Note that TG_EAGAIN, TG_NOOP etc. will just flow through
+//		return (status);
+//	}
+}
+
+/******************************************************************************
+ * STARTUP TESTS
+ ******************************************************************************/
+
+/*
+ * canned_startup() - run a string on startup
+ *
+ *	Pre-load the USB RX (input) buffer with some test strings that will be called 
+ *	on startup. Be mindful of the char limit on the read buffer (RX_BUFFER_SIZE).
+ *	It's best to create a test file for really complicated things.
+ */
+void canned_startup()	// uncomment __CANNED_STARTUP in tempfin1.h if you need this run
+{
+#ifdef __CANNED_STARTUP
+	xio_queue_RX_string(XIO_DEV_USART, "{\"fv\":\"\"}\n");
+#endif
 }
 
 /******************************************************************************

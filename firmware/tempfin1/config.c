@@ -12,82 +12,12 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-/*	Config system overview
- *
- * --- Config objects and the config list ---
- *
- *	The config system provides a structured way to access and set configuration variables
- *	and to invoke commands and functions from the command line and from JSON input.
- *	It also provides a way to get to an arbitrary variable for reading or display.
- *
- *	Config operates as a collection of "objects" (OK, so they are not really objects) 
- *	that encapsulate each variable. The objects are collected into a list (a body) 
- *	which may also have header and footer objects. 
- *
- *	This way the internals don't care about how the variable is represented or 
- *	communicated externally as all operations occur on the cmdObj list. The list is 
- *	populated by the text_parser or the JSON_parser depending on the mode. Lists 
- *	are also used for responses and are read out (printed) by a text-mode or JSON 
- *	print functions.
+/*	See config_data.h for an overview of the config system and it's use.
  */
-/* --- Config variables, tables and strings ---
- *
- *	Each configuration value is identified by a short mnemonic string (token). The token 
- *	is resolved to an index into the cfgArray which is an program memory (PROGMEM) array 
- *	of structures with the static assignments for each variable. The array is organized as:
- * 
- *	  - group string identifying what group the variable is part of (if any)
- *	  - token string - the token for that variable - pre-pended with the group (if any)
- *	  - operations flags - flag if the value should be initialized, persisted, etc.
- *	  - pointer to a formatted print string also in program memory (Used only for text mode)
- *	  - function pointer for formatted print() method or text-mode readouts
- *	  - function pointer for get() method - gets values from memory
- *	  - function pointer for set() method - sets values and runs functions
- *	  - target - memory location that the value is written to / read from
- *	  - default value - for cold initialization
- *
- *	Persistence is provided by an NVM array containing values in EEPROM as doubles; 
- *	indexed by cfgArray index
- *
- *	The following rules apply to mnemonic tokens
- *	 - are up to 5 alphnuneric characters and cannot contain whitespace or separators
- *	 - must be unique (non colliding).
- *
- *  "Groups" are collections of values that mimic REST composite resources. Groups include:
- *	 - a system group is identified by "sys" and contains a collection of otherwise unrelated values
- *
- *	"Uber-groups" are groups of groups that are only used for text-mode printing - e.g.
- *	 - group of all groups
- */
-/* --- Making changes and adding new values
- *
- *	Adding a new value to config (or changing an existing one) involves touching the following places:
- *
- *	 - Add a formatting string to fmt_XXX strings. Not needed if there is no text-mode print function
- *	   of you are using one of the generic print format strings.
- * 
- *	 - Create a new record in cfgArray[]. Use existing ones for examples. You can usually use 
- *	   generic functions for get and set; or create a new one if you need a specialized function.
- *
- *	   The ordering of group displays is set by the order of items in cfgArray. None of the other 
- *	   orders matter but are generally kept sequenced for easier reading and code maintenance. Also,
- *	   Items earlier in the array will resolve token searches faster than ones later in the array.
- *
- *	   Note that matching will occur from the most specific to the least specific, meaning that
- *	   if tokens overlap the longer one should be earlier in the array: "gco" should precede "gc".
- */
-/* --- Rules, guidelines and random stuff
- *
- *	It's the responsibility of the object creator to set the index in the cmdObj when a variable
- *	is "hydrated". Many downstream function expect a valid index int he cmdObj struct. Set the 
- *	index by calling cmd_get_index(). This also validates the token and group if no lookup exists.
- */
-#include <ctype.h>
-#include <stdlib.h>
-#include <math.h>
 #include <string.h>
-#include <stdio.h>			// precursor for xio.h
-#include <avr/pgmspace.h>	// precursor for xio.h
+#include <stdio.h>
+#include <stdbool.h>
+#include <avr/pgmspace.h>
 
 #include "kinen.h"			// config reaches into almost everything
 #include "tempfin1.h"
@@ -97,67 +27,38 @@
 #include "util.h"
 #include "system.h"
 #include "xio/xio.h"
-//#include "xmega/xmega_eeprom.h"
 
-//#include "settings.h"
-//#include "controller.h"
-//#include "canonical_machine.h"
-//#include "gcode_parser.h"
-//#include "json_parser.h"
-//#include "planner.h"
-//#include "stepper.h"
-//#include "gpio.h"
-//#include "test.h"
-//#include "help.h"
-
-typedef char PROGMEM *prog_char_ptr;	// access to PROGMEM arrays of PROGMEM strings
-
-//*** STATIC STUFF ***********************************************************
-
-typedef struct cfgItem {
-	char group[CMD_GROUP_LEN+1];		// group prefix (with NUL termination)
-	char token[CMD_TOKEN_LEN+1];		// token - stripped of group prefix (w/NUL termination)
-	uint8_t flags;						// operations flags - see defines below
-	const char *format;					// pointer to formatted print string
-	fptrPrint print;					// print binding: aka void (*print)(cmdObj_t *cmd);
-	fptrCmd get;						// GET binding aka uint8_t (*get)(cmdObj_t *cmd)
-	fptrCmd set;						// SET binding aka uint8_t (*set)(cmdObj_t *cmd)
-	double *target;						// target for writing config value
-	double def_value;					// default value for config item
-} cfgItem_t;
-
-// operations flags and shorthand
-#define F_INITIALIZE	0x01			// initialize this item (run set during initialization)
-#define F_PERSIST 		0x02			// persist this item when set is run
-#define F_NOSTRIP		0x04			// do not strip the group prefix from the token
-#define _f00			0x00
-#define _fin			F_INITIALIZE
-#define _fpe			F_PERSIST
-#define _fip			(F_INITIALIZE | F_PERSIST)
-#define _fns			F_NOSTRIP
-#define _f07			(F_INITIALIZE | F_PERSIST | F_NOSTRIP)
-
-// prototypes are divided into generic functions and parameter-specific functions
+/***********************************************************************************
+ **** GENERIC STATICS **************************************************************
+ ***********************************************************************************
+ * Contains function prototypes and other declarations that are not application
+ * specific and are needed to support the config_data definitions that follow
+ */
+typedef char PROGMEM *prog_char_ptr;		// access to PROGMEM arrays of PROGMEM strings
 
 // generic internal functions
-static uint8_t _set_nul(cmdObj_t *cmd);	// noop
-//static uint8_t _set_ui8(cmdObj_t *cmd);	// set a uint8_t value
-//static uint8_t _set_int(cmdObj_t *cmd);	// set an integer value
-static uint8_t _set_dbl(cmdObj_t *cmd);	// set a double value
+static uint8_t _get_nul(cmdObj_t *cmd);		// get null value type
+static uint8_t _set_nul(cmdObj_t *cmd);		// set nothing (no operation)
+static void _print_nul(cmdObj_t *cmd);		// print nothing (no operation)
 
-static uint8_t _get_nul(cmdObj_t *cmd);	// get null value type
-//static uint8_t _get_ui8(cmdObj_t *cmd);	// get uint8_t value
-//static uint8_t _get_int(cmdObj_t *cmd);	// get uint32_t integer value
-static uint8_t _get_dbl(cmdObj_t *cmd);	// get double value
+static uint8_t _get_ui8(cmdObj_t *cmd);		// get uint8_t value
+static uint8_t _set_ui8(cmdObj_t *cmd);		// set uint8_t value
+static void _print_ui8(cmdObj_t *cmd);		// print unit8_t value
 
-static void _print_nul(cmdObj_t *cmd);	// print nothing
-//static void _print_str(cmdObj_t *cmd);	// print a string value
-//static void _print_ui8(cmdObj_t *cmd);	// print unit8_t value w/no units
-//static void _print_int(cmdObj_t *cmd);	// print integer value w/no units
-static void _print_dbl(cmdObj_t *cmd);	// print double value w/no units
+static uint8_t _get_int(cmdObj_t *cmd);		// get uint32_t integer value
+static uint8_t _set_int(cmdObj_t *cmd);		// set uint32_t integer value
+static void _print_int(cmdObj_t *cmd);		// print uint32_t integer value
 
-// helpers for generic functions
+static uint8_t _get_dbl(cmdObj_t *cmd);		// get double value
+static uint8_t _set_dbl(cmdObj_t *cmd);		// set double value
+static void _print_dbl(cmdObj_t *cmd);		// print double value
+
+static void _print_str(cmdObj_t *cmd);		// print a string value
+
+// generic helper functions
+static uint8_t _set_defa(cmdObj_t *cmd);	// reset config to default values
 static char *_get_format(const index_t i, char *format);
+
 //static uint8_t _text_parser(char *str, cmdObj_t *c);
 //static void _print_text_inline_pairs();
 //static void _print_text_inline_values();
@@ -167,292 +68,31 @@ static uint8_t _set_grp(cmdObj_t *cmd);	// set data for a group
 static uint8_t _get_grp(cmdObj_t *cmd);	// get data for a group
 //static void _do_group_list(cmdObj_t *cmd, char list[][CMD_TOKEN_LEN+1]); // helper to print multiple groups in a list
 
-/*****************************************************************************
- **** PARAMETER-SPECIFIC CODE REGION *****************************************
- **** This code and data will change as you add / update config parameters ***
- *****************************************************************************/
-
-// parameter-specific internal functions
-//static uint8_t _get_id(cmdObj_t *cmd);	// get device ID (signature)
-static uint8_t _set_hv(cmdObj_t *cmd);		// set hardware version
-/*
-static uint8_t _get_sr(cmdObj_t *cmd);		// run status report (as data)
-static void _print_sr(cmdObj_t *cmd);		// run status report (as printout)
-static uint8_t _set_sr(cmdObj_t *cmd);		// set status report specification
-static uint8_t _set_si(cmdObj_t *cmd);		// set status report interval
-static uint8_t _get_id(cmdObj_t *cmd);		// get device ID
-static uint8_t _get_qr(cmdObj_t *cmd);		// run queue report (as data)
-static uint8_t _get_rx(cmdObj_t *cmd);		// get bytes in RX buffer
-static uint8_t _set_defa(cmdObj_t *cmd);	// reset config to default values
-
-static uint8_t _set_ic(cmdObj_t *cmd);		// ignore CR or LF on RX input
-static uint8_t _set_ec(cmdObj_t *cmd);		// expand CRLF on TX outout
-static uint8_t _set_ee(cmdObj_t *cmd);		// enable character echo
-static uint8_t _set_ex(cmdObj_t *cmd);		// enable XON/XOFF
-static uint8_t _set_baud(cmdObj_t *cmd);	// set USB baud rate
-*/
-
-/***** PROGMEM Strings ******************************************************/
-
-/* strings used by formatted print functions */
-/*
-static const char msg_units0[] PROGMEM = " in";	// used by generic print functions
-static const char msg_units1[] PROGMEM = " mm";
-static const char msg_units2[] PROGMEM = " deg";
-static PGM_P const msg_units[] PROGMEM = { msg_units0, msg_units1, msg_units2 };
-#define F_DEG 2
-*/
-
-/* PROGMEM strings for print formatting
- * NOTE: DO NOT USE TABS IN FORMAT STRINGS
+/***********************************************************************************
+ **** APPLICATION-SPECIFIC DATA ****************************************************
+ ***********************************************************************************
+ * This section includes the config_data.h file that contains:
+ *	- application-specific message and print format strings
+ *	- application-specific config array
+ *	-,application-specific accessor functions and function prototypes 
+ *	- any other application-specific data
  */
-static const char fmt_nul[] PROGMEM = "";
-static const char fmt_ui8[] PROGMEM = "%d\n";	// generic format for ui8s
-static const char fmt_dbl[] PROGMEM = "%f\n";	// generic format for doubles
-static const char fmt_str[] PROGMEM = "%s\n";	// generic format for string message (with no formatting)
+#include "config_data.h"
 
-// System group and ungrouped formatting strings
-static const char fmt_fv[] PROGMEM = "[fv]  firmware version%16.2f\n";
-static const char fmt_fb[] PROGMEM = "[fb]  firmware build%18.2f\n";
-static const char fmt_hv[] PROGMEM = "[hv]  hardware version%16.2f\n";
-//static const char fmt_id[] PROGMEM = "[id]  TinyG ID%30s\n";
-
-/***** PROGMEM config array **************************************************
- *
- *	NOTES:
- *	- Token matching occurs from the most specific to the least specific.
- *	  This means that if shorter tokens overlap longer ones the longer one
- *	  must precede the shorter one. E.g. "gco" needs to come before "gc"
- *
- *	- Mark group strings for entries that have no group as nul -->" ". 
- *	  This is important for group expansion.
- *
- *	- Groups do not have groups. Neither do uber-groups, e.g.
- *	  'x' is --> { "", "x",  	and 'm' is --> { "", "m",  
- */
-
-const cfgItem_t cfgArray[] PROGMEM = {
-	// grp  token flags format*, print_func, get_func, set_func  target for get/set,   default value
-	{ "sys","fb", _f07, fmt_fb, _print_dbl, _get_dbl, _set_nul, (double *)&cfg.fw_build,   BUILD_NUMBER }, // MUST BE FIRST!
-	{ "sys","fv", _f07, fmt_fv, _print_dbl, _get_dbl, _set_nul, (double *)&cfg.fw_version, VERSION_NUMBER },
-	{ "sys","hv", _f07, fmt_hv, _print_dbl, _get_dbl, _set_hv,  (double *)&cfg.hw_version, HARDWARE_VERSION },
-//	{ "sys","id", _fns, fmt_id, _print_str, _get_id,  _set_nul, (double *)&kc.null, 0 },		// device ID (ASCII signature)
-/*
-	// Reports, tests, help, and messages
-	{ "", "sr",  _f00, fmt_nul, _print_sr,  _get_sr,  _set_sr,  (double *)&kc.null, 0 },		// status report object
-	{ "", "qr",  _f00, fmt_qr,  _print_int, _get_qr,  _set_nul, (double *)&kc.null, 0 },		// queue report setting
-	{ "", "rx",  _f00, fmt_rx,  _print_int, _get_rx,  _set_nul, (double *)&kc.null, 0 },		// space in RX buffer
-	{ "", "msg", _f00, fmt_str, _print_str, _get_nul, _set_nul, (double *)&kc.null, 0 },		// string for generic messages
-	{ "", "test",_f00, fmt_nul, _print_nul, print_test_help, tg_test, (double *)&kc.test,0 },	// prints test help screen
-	{ "", "defa",_f00, fmt_nul, _print_nul, print_defaults_help,_set_defa,(double *)&kc.null,0},// prints defaults help screen
-	{ "", "boot",_f00, fmt_nul, _print_nul, print_boot_loader_help,_set_nul, (double *)&kc.null,0 },
-	{ "", "help",_f00, fmt_nul, _print_nul, print_config_help,_set_nul, (double *)&kc.null,0 },	// prints config help screen
-	{ "", "h",   _f00, fmt_nul, _print_nul, print_config_help,_set_nul, (double *)&kc.null,0 },	// alias for "help"
-*/
-	// System parameters
-	// NOTE: The ordering within the gcode defaults is important for token resolution
-	// NOTE: Some values have been removed from the system group but are still accessible as individual elements
-//	{ "sys","ic",  _f07, fmt_ic, _print_ui8, _get_ui8, _set_ic,  (double *)&cfg.ignore_crlf,		COM_IGNORE_CRLF },
-//	{ "sys","ec",  _f07, fmt_ec, _print_ui8, _get_ui8, _set_ec,  (double *)&cfg.enable_cr,			COM_EXPAND_CR },
-//	{ "sys","ee",  _f07, fmt_ee, _print_ui8, _get_ui8, _set_ee,  (double *)&cfg.enable_echo,		COM_ENABLE_ECHO },
-//	{ "sys","ex",  _f07, fmt_ex, _print_ui8, _get_ui8, _set_ex,  (double *)&cfg.enable_xon,			COM_ENABLE_XON },
-//	{ "sys","eq",  _f07, fmt_eq, _print_ui8, _get_ui8, _set_ui8, (double *)&cfg.enable_qr,			QR_VERBOSITY },
-//	{ "sys","ej",  _f07, fmt_ej, _print_ui8, _get_ui8, _set_ui8, (double *)&cfg.comm_mode,			COMM_MODE },
-//	{ "sys","jv",  _f07, fmt_jv, _print_ui8, _get_ui8, cmd_set_jv,(double *)&cfg.json_verbosity,	JSON_VERBOSITY },
-//	{ "sys","tv",  _f07, fmt_tv, _print_ui8, _get_ui8, cmd_set_tv,(double *)&cfg.text_verbosity,	TEXT_VERBOSITY },
-//	{ "sys","si",  _f07, fmt_si, _print_dbl, _get_int, _set_si,  (double *)&cfg.status_report_interval,STATUS_REPORT_INTERVAL_MS },
-//	{ "sys","sv",  _f07, fmt_sv, _print_ui8, _get_ui8, _set_ui8, (double *)&cfg.status_report_verbosity,SR_VERBOSITY },
-//	{ "sys","baud",_fns, fmt_baud,_print_ui8,_get_ui8, _set_baud,(double *)&cfg.usb_baud_rate,		XIO_BAUD_115200 },
-
-/*	// Persistence for status report - must be in sequence
-	// *** Count must agree with CMD_STATUS_REPORT_LEN in config.h ***
-	{ "","se00",_fpe, fmt_nul, _print_nul, _get_int, _set_int,(double *)&cfg.status_report_list[0],0 },
-	{ "","se01",_fpe, fmt_nul, _print_nul, _get_int, _set_int,(double *)&cfg.status_report_list[1],0 },
-	{ "","se02",_fpe, fmt_nul, _print_nul, _get_int, _set_int,(double *)&cfg.status_report_list[2],0 },
-	{ "","se03",_fpe, fmt_nul, _print_nul, _get_int, _set_int,(double *)&cfg.status_report_list[3],0 },
-*/
-	// Group lookups - must follow the single-valued entries for proper sub-string matching
-	// *** Must agree with CMD_COUNT_GROUPS below ****
-	{ "","sys",_f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 },	// system group
-
-	// Uber-group (groups of groups, for text-mode displays only)
-	// *** Must agree with CMD_COUNT_UBER_GROUPS below ****
-	{ "", "$", _f00, fmt_nul, _print_nul, _get_nul, _set_nul,(double *)&kc.null,0 }
-};
-
-#define CMD_COUNT_GROUPS 		1		// count of simple groups
-#define CMD_COUNT_UBER_GROUPS 	1 		// count of uber-groups
-
-#define CMD_INDEX_MAX (sizeof cfgArray / sizeof(cfgItem_t))
-#define CMD_INDEX_END_SINGLES		(CMD_INDEX_MAX - CMD_COUNT_UBER_GROUPS - CMD_COUNT_GROUPS - CMD_STATUS_REPORT_LEN)
-#define CMD_INDEX_START_GROUPS		(CMD_INDEX_MAX - CMD_COUNT_UBER_GROUPS - CMD_COUNT_GROUPS)
-#define CMD_INDEX_START_UBER_GROUPS (CMD_INDEX_MAX - CMD_COUNT_UBER_GROUPS)
-
-#define _index_is_single(i) ((i <= CMD_INDEX_END_SINGLES) ? true : false)	// Evaluators
+// some evaluators that flow from the data file:
+#define _index_is_single(i) ((i <= CMD_INDEX_END_SINGLES) ? true : false)
 #define _index_lt_groups(i) ((i <= CMD_INDEX_START_GROUPS) ? true : false)
 #define _index_is_group(i) (((i >= CMD_INDEX_START_GROUPS) && (i < CMD_INDEX_START_UBER_GROUPS)) ? true : false)
 #define _index_is_uber(i)   ((i >= CMD_INDEX_START_UBER_GROUPS) ? true : false)
 #define _index_is_group_or_uber(i) ((i >= CMD_INDEX_START_GROUPS) ? true : false)
-
-//index_t cmd_get_max_index() { return (CMD_INDEX_MAX);}
 uint8_t cmd_index_is_group(index_t index) { return _index_is_group(index);}
+//index_t cmd_get_max_index() { return (CMD_INDEX_MAX);}
 
-/**** Versions, IDs, and simple reports  ****
- * _set_hv() - set hardweare version number
- * _get_id() - get device ID (signature)
- * _get_qr() - run queue report
- * _get_rx() - get bytes available in RX buffer
- */
-static uint8_t _set_hv(cmdObj_t *cmd) 
-{
-	_set_dbl(cmd);					// record the hardware version
-//	sys_port_bindings(cmd->value);	// reset port bindings
-//	gpio_init();					// re-initialize the GPIO ports
-	return (SC_OK);
-}
-
-/**** COMMUNICATIONS SETTINGS ****
- * _set_ic() - ignore CR or LF on RX
- * _set_ec() - enable CRLF on TX
- * _set_ee() - enable character echo
- * _set_ex() - enable XON/XOFF
- * _set_baud() - set USB baud rate
- *	The above assume USB is the std device
- */
-
-/*
-static uint8_t _set_comm_helper(cmdObj_t *cmd, uint32_t yes, uint32_t no)
-{
-	if (fp_NOT_ZERO(cmd->value)) { 
-		(void)xio_ctrl(XIO_DEV_USB, yes);
-	} else { 
-		(void)xio_ctrl(XIO_DEV_USB, no);
-	}
-	return (SC_OK);
-}
-
-static uint8_t _set_ic(cmdObj_t *cmd) 	// ignore CR or LF on RX
-{
-	cfg.ignore_crlf = (uint8_t)cmd->value;
-	(void)xio_ctrl(XIO_DEV_USB, XIO_NOIGNORECR);	// clear them both
-	(void)xio_ctrl(XIO_DEV_USB, XIO_NOIGNORELF);
-
-	if (cfg.ignore_crlf == IGNORE_CR) {				// $ic=1
-		(void)xio_ctrl(XIO_DEV_USB, XIO_IGNORECR);
-	} else if (cfg.ignore_crlf == IGNORE_LF) {		// $ic=2
-		(void)xio_ctrl(XIO_DEV_USB, XIO_IGNORELF);
-	}
-	return (SC_OK);
-}
-
-static uint8_t _set_ec(cmdObj_t *cmd) 	// expand CR to CRLF on TX
-{
-	cfg.enable_cr = (uint8_t)cmd->value;
-	return(_set_comm_helper(cmd, XIO_CRLF, XIO_NOCRLF));
-	return (SC_OK);
-}
-
-static uint8_t _set_ee(cmdObj_t *cmd) 	// enable character echo
-{
-	cfg.enable_echo = (uint8_t)cmd->value;
-	return(_set_comm_helper(cmd, XIO_ECHO, XIO_NOECHO));
-	return (SC_OK);
-}
-
-static uint8_t _set_ex(cmdObj_t *cmd)		// enable XON/XOFF
-{
-	cfg.enable_xon = (uint8_t)cmd->value;
-	return(_set_comm_helper(cmd, XIO_XOFF, XIO_NOXOFF));
-	return (SC_OK);
-}
-*/
-/*
- * _set_baud() - set USART baud rate
- *
- *	See xio_usart.h for valid values. Works as a callback.
- *	The initial routine changes the baud config setting and sets a flag
- *	Then it posts a user message indicating the new baud rate
- *	Then it waits for the TX buffer to empty (so the message is sent)
- *	Then it performs the callback to apply the new baud rate
- */
-/*
-static uint8_t _set_baud(cmdObj_t *cmd)
-{
-	uint8_t baud = (uint8_t)cmd->value;
-	if ((baud < 1) || (baud > 6)) {
-		cmd_add_message_P(PSTR("*** WARNING *** Illegal baud rate specified"));
-		return (SC_INPUT_VALUE_UNSUPPORTED);
-	}
-	cfg.usb_baud_rate = baud;
-	cfg.usb_baud_flag = true;
-	char message[CMD_MESSAGE_LEN]; 
-	sprintf_P(message, PSTR("*** NOTICE *** Restting baud rate to %S"),(PGM_P)pgm_read_word(&msg_baud[baud]));
-	cmd_add_message(message);
-	return (SC_OK);
-}
-
-uint8_t cfg_baud_rate_callback(void) 
-{
-	if (cfg.usb_baud_flag == false) { return(SC_NOOP);}
-	cfg.usb_baud_flag = false;
-	xio_set_baud(XIO_DEV_USB, cfg.usb_baud_rate);
-	return (SC_OK);
-}
-*/
-
-/**** UberGroup Operations ****
- * Uber groups are groups of groups organized for convenience:
- *	- all		- group of all groups
- * _do_all()		- get and print all groups uber group
- */
-/*
-static void _do_group_list(cmdObj_t *cmd, char list[][CMD_TOKEN_LEN+1]) // helper to print multiple groups in a list
-{
-	for (uint8_t i=0; i < CMD_MAX_OBJECTS; i++) {
-		if (list[i][0] == NUL) return;
-		cmd = cmd_body;
-		strncpy(cmd->token, list[i], CMD_TOKEN_LEN);
-		cmd->index = cmd_get_index("", cmd->token);
-//		cmd->type = TYPE_PARENT;
-		cmd_get_cmdObj(cmd);
-		cmd_print_list(SC_OK, TEXT_MULTILINE_FORMATTED, JSON_RESPONSE_FORMAT);
-	}
-}
-
-
-static uint8_t _do_all(cmdObj_t *cmd)		// print all parameters
-{
-	// print system group
-	strcpy(cmd->token,"sys");
-	_get_grp(cmd);
-	cmd_print_list(SC_OK, TEXT_MULTILINE_FORMATTED,  JSON_RESPONSE_FORMAT);
-
-	_do_offsets(cmd);
-	_do_motors(cmd);
-	_do_axes(cmd);
-
-	// print PWM group
-	strcpy(cmd->token,"p1");
-	_get_grp(cmd);
-	cmd_print_list(SC_OK, TEXT_MULTILINE_FORMATTED, JSON_RESPONSE_FORMAT);
-
-	return (SC_COMPLETE);
-}
-*/
-/*****************************************************************************
- *****************************************************************************
- *****************************************************************************
- *** END SETTING-SPECIFIC REGION *********************************************
- *** Code below should not require changes as parameters are added/updated ***
- *****************************************************************************
- *****************************************************************************
- *****************************************************************************/
-
-/****************************************************************************/
-/**** CMD FUNCTION ENTRY POINTS *********************************************/
-/****************************************************************************/
-/* These are the primary access points to cmd functions
- * These are the gatekeeper functions that check index ranges so others don't have to
+/***********************************************************************************
+ **** CMD FUNCTION ENTRY POINTS ****************************************************
+ ***********************************************************************************
+ * Primary access points to cmd functions
+ * These gatekeeper functions check index ranges so others don't have to
  *
  * cmd_set() 	- Write a value or invoke a function - operates on single valued elements or groups
  * cmd_get() 	- Build a cmdObj with the values from the target & return the value
@@ -506,53 +146,27 @@ void cmd_persist(cmdObj_t *cmd)
 void cfg_init()
 {
 	cmdObj_t *cmd = cmd_reset_list();
-//	cm_set_units_mode(MILLIMETERS);			// must do init in MM mode
 	cfg.comm_mode = JSON_MODE;				// initial value until EEPROM is read
 //	cfg.nvm_base_addr = NVM_BASE_ADDR;
 //	cfg.nvm_profile_base = cfg.nvm_base_addr;
-	cmd->index = 0;							// this will read the first record in NVM
-//	cmd_read_NVM_value(cmd);
-/*
-	// Case (1) NVM is not setup or not in revision
-	if (cmd->value != cfg.fw_build) {
-		cmd->value = true;
-		_set_defa(cmd);		// this subroutine called from here and from the $defa=1 command
-
-	// Case (2) NVM is setup and in revision
-	} else {
-		tg_print_loading_configs_message();
-		for (cmd->index=0; _index_is_single(cmd->index); cmd->index++) {
-			if (pgm_read_byte(&cfgArray[cmd->index].flags) & F_INITIALIZE) {
-				strcpy_P(cmd->token, cfgArray[cmd->index].token);	// read the token from the array
-				cmd_read_NVM_value(cmd);
-				cmd_set(cmd);
-			}
-		}
-	}
-	rpt_init_status_report(true);// requires special treatment (persist = true)
-*/
+	cmd->value = true;
+	_set_defa(cmd);		// this subroutine called from here and from the $defa=1 command
 }
-/*
+
 static uint8_t _set_defa(cmdObj_t *cmd) 
 {
-	if (cmd->value != true) {		// failsafe. Must set true or no action occurs
-		print_defaults_help(cmd);
-		return (SC_OK);
-	}
-	cm_set_units_mode(MILLIMETERS);	// must do init in MM mode
-	tg_print_initializing_message();
-
+	if (cmd->value != true) { return (SC_OK);}	// failsafe. Must set true or no action occurs
+//	rpt_print_initializing_message();
 	for (cmd->index=0; _index_is_single(cmd->index); cmd->index++) {
 		if (pgm_read_byte(&cfgArray[cmd->index].flags) & F_INITIALIZE) {
 			cmd->value = (double)pgm_read_float(&cfgArray[cmd->index].def_value);
 			strcpy_P(cmd->token, cfgArray[cmd->index].token);
 			cmd_set(cmd);
-			cmd_persist(cmd);
+//			cmd_persist(cmd);
 		}
 	}
 	return (SC_OK);
 }
-*/
 
 /****************************************************************************
  * cfg_text_parser() - update a config setting from a text block (text mode)
@@ -566,17 +180,12 @@ static uint8_t _set_defa(cmdObj_t *cmd)
  */
 uint8_t cfg_text_parser(char *str)
 {
+	return (SC_OK); // There is no text parser in this code - just JSON
+}
 /*
 	cmdObj_t *cmd = cmd_reset_list();		// returns first object in the body
 	uint8_t status = SC_OK;
 
-	if (str[0] == '?') {					// handle status report case
-		rpt_run_text_status_report();
-		return (SC_OK);
-	}
-	if ((str[0] == '$') && (str[1] == NUL)) {  // treat a lone $ as a sys request
-		strcat(str,"sys");
-	}
 	// single-unit parser processing
 	ritorno(_text_parser(str, cmd));		// decode the request or return if error
 	if ((cmd->type == TYPE_PARENT) || (cmd->type == TYPE_NULL)) {
@@ -589,10 +198,10 @@ uint8_t cfg_text_parser(char *str)
 	}
 	cmd_print_list(status, TEXT_MULTILINE_FORMATTED, JSON_RESPONSE_FORMAT); // print the results
 	return (status);
-*/
+
 	return (SC_OK);
 }
-/*
+
 static uint8_t _text_parser(char *str, cmdObj_t *cmd)
 {
 	char *ptr_rd, *ptr_wr;					// read and write pointers
@@ -658,7 +267,6 @@ static uint8_t _get_nul(cmdObj_t *cmd)
 	return (SC_NOOP);
 }
 
-/*
 static uint8_t _get_ui8(cmdObj_t *cmd)
 {
 	cmd->value = (double)*((uint8_t *)pgm_read_word(&cfgArray[cmd->index].target));
@@ -677,8 +285,7 @@ static void _print_ui8(cmdObj_t *cmd)
 	char format[CMD_FORMAT_LEN+1];
 	fprintf(stderr, _get_format(cmd->index, format), (uint8_t)cmd->value);
 }
-*/
-/*
+
 static uint8_t _get_int(cmdObj_t *cmd)
 {
 	cmd->value = (double)*((uint32_t *)pgm_read_word(&cfgArray[cmd->index].target));
@@ -697,7 +304,6 @@ static void _print_int(cmdObj_t *cmd)
 	char format[CMD_FORMAT_LEN+1];
 	fprintf(stderr, _get_format(cmd->index, format), (uint32_t)cmd->value);
 }
-*/
 
 static uint8_t _get_dbl(cmdObj_t *cmd)
 {
@@ -718,15 +324,12 @@ static void _print_dbl(cmdObj_t *cmd)
 	fprintf(stderr, _get_format(cmd->index, format), cmd->value);
 }
 
-/*
 static void _print_str(cmdObj_t *cmd)
 {
 	cmd_get(cmd);
 	char format[CMD_FORMAT_LEN+1];
 	fprintf(stderr, _get_format(cmd->index, format), *cmd->stringp);
 }
-*/
-
 
 /***************************************************************************** 
  * Accessors - get various data from an object given the index
@@ -740,9 +343,9 @@ static char *_get_format(const index_t i, char *format)
 
 /********************************************************************************
  * Group operations
- */
-/*
+ *
  * _get_grp() - read data from a group
+ * _set_grp() - get or set one or more values in a group
  *
  *	_get_grp() is a group expansion function that expands the parent group and 
  *	returns the values of all the children in that group. It expects the first 
@@ -811,17 +414,16 @@ uint8_t cmd_group_is_prefixed(char *group)
 	return (true);
 }
 
-/*****************************************************************************
- ***** cmdObj functions ******************************************************
- *****************************************************************************/
+/***********************************************************************************
+ ***** cmdObj functions ************************************************************
+ ***********************************************************************************/
 
 /*****************************************************************************
  * cmdObj helper functions and other low-level cmd helpers
  * cmd_get_index() 		 - get index from mnenonic token + group
  * cmd_get_type()		 - returns command type as a CMD_TYPE enum
  * cmd_persist_offsets() - write any changed G54 (et al) offsets back to NVM
- */
-/* 
+ * 
  * cmd_get_index() is the most expensive routine in the whole config. It does a linear table scan 
  * of the PROGMEM strings, which of course could be further optimized with indexes or hashing.
  */
@@ -856,32 +458,6 @@ index_t cmd_get_index(const char *group, const char *token)
 	}
 	return (NO_MATCH);
 }
-/*
-uint8_t cmd_get_type(cmdObj_t *cmd)
-{
-	if (strcmp("gc", cmd->token) == 0) return (CMD_TYPE_GCODE);
-	if (strcmp("sr", cmd->token) == 0) return (CMD_TYPE_REPORT);
-	if (strcmp("qr", cmd->token) == 0) return (CMD_TYPE_REPORT);
-	return (CMD_TYPE_CONFIG);
-}
-*/
-/*
-uint8_t cmd_persist_offsets(uint8_t flag)
-{
-	if (flag == true) {
-		cmdObj_t cmd;
-		for (uint8_t i=1; i<=COORDS; i++) {
-			for (uint8_t j=0; j<AXES; j++) {
-				sprintf(cmd.token, "g%2d%c", 53+i, ("xyzabc")[j]);
-				cmd.index = cmd_get_index("", cmd.token);
-				cmd.value = cfg.offset[i][j];
-				cmd_persist(&cmd);				// only writes changed values
-			}
-		}
-	}
-	return (SC_OK);
-}
-*/
 /*
  * cmdObj low-level object and list operations
  * cmd_get_cmdObj()		- setup a cmd object by providing the index
@@ -1093,61 +669,9 @@ void cmd_print_list(uint8_t status, uint8_t text_flags, uint8_t json_flags)
 			case JSON_OBJECT_FORMAT: { js_print_json_object(cmd_body); break; }
 			case JSON_RESPONSE_FORMAT: { js_print_json_response(status); break; }
 		}
-//	} else {
-//		switch (text_flags) {
-//			case TEXT_NO_PRINT: { break; } 
-//			case TEXT_INLINE_PAIRS: { _print_text_inline_pairs(); break; }
-//			case TEXT_INLINE_VALUES: { _print_text_inline_values(); break; }
-//			case TEXT_MULTILINE_FORMATTED: { _print_text_multiline_formatted();}
-//		}
-	}
-}
-/*
-void _print_text_inline_pairs()
-{
-	cmdObj_t *cmd = cmd_body;
-
-	for (uint8_t i=0; i<CMD_BODY_LEN-1; i++) {
-		switch (cmd->type) {
-			case TYPE_PARENT:	{ cmd = cmd->nx; continue; }
-			case TYPE_FLOAT:	{ fprintf_P(stderr,PSTR("%s:%1.3f"), cmd->token, cmd->value); break;}
-			case TYPE_INTEGER:	{ fprintf_P(stderr,PSTR("%s:%1.0f"), cmd->token, cmd->value); break;}
-			case TYPE_STRING:	{ fprintf_P(stderr,PSTR("%s:%s"), cmd->token, *cmd->stringp); break;}
-			case TYPE_EMPTY:	{ fprintf_P(stderr,PSTR("\n")); return; }
-		}
-		cmd = cmd->nx;
-		if (cmd->type != TYPE_EMPTY) { fprintf_P(stderr,PSTR(","));}		
 	}
 }
 
-void _print_text_inline_values()
-{
-	cmdObj_t *cmd = cmd_body;
-
-	for (uint8_t i=0; i<CMD_BODY_LEN-1; i++) {
-		switch (cmd->type) {
-			case TYPE_PARENT:	{ cmd = cmd->nx; continue; }
-			case TYPE_FLOAT:	{ fprintf_P(stderr,PSTR("%1.3f"), cmd->value); break;}
-			case TYPE_INTEGER:	{ fprintf_P(stderr,PSTR("%1.0f"), cmd->value); break;}
-			case TYPE_STRING:	{ fprintf_P(stderr,PSTR("%s"), *cmd->stringp); break;}
-			case TYPE_EMPTY:	{ fprintf_P(stderr,PSTR("\n")); return; }
-		}
-		cmd = cmd->nx;
-		if (cmd->type != TYPE_EMPTY) { fprintf_P(stderr,PSTR(","));}
-	}
-}
-
-void _print_text_multiline_formatted()
-{
-	cmdObj_t *cmd = cmd_body;
-
-	for (uint8_t i=0; i<CMD_BODY_LEN-1; i++) {
-		if (cmd->type != TYPE_PARENT) { cmd_print(cmd);}
-		cmd = cmd->nx;
-		if (cmd->type == TYPE_EMPTY) { break;}
-	}
-}
-*/
 /************************************************************************************
  ***** EEPROM access functions ******************************************************
  ************************************************************************************

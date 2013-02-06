@@ -143,39 +143,3 @@ int xio_getc_usart(FILE *stream)
 	return (c);
 */
 }
-
-/* Fakeout routines for testing
- *
- *	xio_queue_RX_string_usart() - fake ISR to put a string in the RX buffer
- *	xio_queue_RX_char_usart() - fake ISR to put a char in the RX buffer
- *
- *	String must be NUL terminated but doesn't require a CR or LF
- *	Also has wrappers for USB and RS485
- */
-/*
-void xio_queue_RX_string_usart(const uint8_t dev, const char *buf)
-{
-	uint8_t i=0;
-	while (buf[i] != NUL) {
-		xio_queue_RX_char_usart(dev, buf[i++]);
-	}
-}
-
-void xio_queue_RX_char_usart(const uint8_t dev, const char c)
-{
-	xioDev *d = &ds[dev];						// init device struct pointer
-	xioUsart *dx =(xioUsart *)d->x;				// USART pointer
-
-	if ((--dx->rx_buf_head) == 0) { 			// wrap condition
-		dx->rx_buf_head = RX_BUFFER_SIZE-1;		// -1 avoids the off-by-one err
-	}
-	if (dx->rx_buf_head != dx->rx_buf_tail) {	// write char unless buffer full
-		dx->rx_buf[dx->rx_buf_head] = c;		// FAKE INPUT DATA
-		return;
-	}
-	// buffer-full handling
-	if ((++dx->rx_buf_head) > RX_BUFFER_SIZE-1) { // reset the head
-		dx->rx_buf_head = 1;
-	}
-}
-*/

@@ -12,12 +12,10 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-
-#ifndef config_h
-#define config_h
-
-#include <stdbool.h>
-
+/*
+ * See config_data.h for a general description of the config system and its use.
+ * Notes in this section concern the internals and programming.
+ */
 /**** cmdObj lists ****
  *
  * 	Commands and groups of commands are processed internally a doubly linked list
@@ -32,7 +30,7 @@
  *	list you can terminate your own last element, or just leave the EMPTY elements 
  *	to be skipped over during outpout serialization.
  * 
- * 	We don;t use recursion so parent/child nesting relationships are captured in a 
+ * 	We don't use recursion so parent/child nesting relationships are captured in a 
  *	'depth' variable, This must remain consistent if the curlies  are to work out. 
  *	In general you should not have to track depth explicitly if you use cmd_reset_list()
  *	or the accessor functions like cmd_add_integer() or cmd_add_message(). 
@@ -55,24 +53,37 @@
  *	CMD_BODY_LEN needs to allow for one parent JSON object and enough children
  *	to complete the largest possible operation - usually the status report.
  */
+#ifndef config_h
+#define config_h
+
+/***********************************************************************************
+ **** DEFINITIONS AND SIZING *******************************************************
+ ***********************************************************************************/
+
+// Stuff you may want to change
 									// chose one based on # of elements in cmdArray
-//typedef uint8_t index_t;			// use this if there are < 255 indexed objects
-typedef uint16_t index_t;			// use this if there are > 255 indexed objects
-#define NO_MATCH (index_t)0xFFFF
-									// cmdObj defines
-#define CMD_GROUP_LEN 3				// max length of group prefix
-#define CMD_TOKEN_LEN 5				// mnemonic token string: group prefix + short token
+typedef uint8_t index_t;			// use this if there are < 256 indexed objects
+//typedef uint16_t index_t;			// use this if there are > 255 indexed objects
+
+									// defines allocated from stack (not-pre-allocated)
 #define CMD_FORMAT_LEN 80			// print formatting string max length
 #define CMD_MESSAGE_LEN 80			// sufficient space to contain end-user messages
-#define CMD_FOOTER_LEN 18			// sufficient space to contain a JSON footer array
-#define CMD_SHARED_STRING_LEN 128	// shared string for string values
 
-									// cmdObj list defines
-#define CMD_BODY_LEN 6				// body elements - allow for 1 parent + N children 
+									// pre-allocated defines (take RAM permanently)
+#define CMD_SHARED_STRING_LEN 80	// shared string for string values
+#define CMD_BODY_LEN 12				// body elements - allow for 1 parent + N children
+									// (each body element takes 23 bytes of RAM)
+
+// Stuff you probably don't want to change 
+
+#define NO_MATCH (index_t)0xFFFF
+#define CMD_GROUP_LEN 3				// max length of group prefix
+#define CMD_TOKEN_LEN 5				// mnemonic token string: group prefix + short token
+#define CMD_FOOTER_LEN 18			// sufficient space to contain a JSON footer array
 #define CMD_LIST_LEN (CMD_BODY_LEN+2)// +2 allows for a header and a footer
 #define CMD_MAX_OBJECTS (CMD_BODY_LEN-1)// maximum number of objects in a body string
 
-#define CMD_STATUS_REPORT_LEN CMD_MAX_OBJECTS 	// max number of status report elements - see cfgArray
+//#define CMD_STATUS_REPORT_LEN CMD_MAX_OBJECTS 	// max number of status report elements - see cfgArray
 									// must also line up in cfgArray, se00 - seXX
 
 #define NVM_VALUE_LEN 4				// NVM value length (double, fixed length)
@@ -88,18 +99,23 @@ enum objType {						// object / value typing for config and JSON
 	TYPE_ARRAY,						// value is array element count, values are CSV ASCII in string field
 	TYPE_PARENT						// object is a parent to a sub-object
 };
-/*
-enum cmdType {						// classification of commands
-	CMD_TYPE_NULL = 0,
-	CMD_TYPE_CONFIG,				// configuration commands
-	CMD_TYPE_GCODE,					// gcode
-	CMD_TYPE_REPORT					// SR, QR and any other report
-};
-*/
 enum tgCommunicationsMode {
 	TEXT_MODE = 0,					// text command line mode
 	JSON_MODE,						// strict JSON construction
 	JSON_MODE_RELAXED				// relaxed JSON construction (future)
+};
+
+enum jsonFormats {					// json output print modes
+	JSON_NO_PRINT = 0,				// don't print anything if you find yourself in JSON mode
+	JSON_OBJECT_FORMAT,				// print just the body as a json object
+	JSON_RESPONSE_FORMAT			// print the header/body/footer as a response object
+};
+
+enum textFormats {					// text output print modes
+	TEXT_NO_PRINT = 0,				// don't print anything if you find yourself in TEXT mode
+	TEXT_INLINE_PAIRS,				// print key:value pairs as comma separated pairs
+	TEXT_INLINE_VALUES,				// print values as commas separated values
+	TEXT_MULTILINE_FORMATTED		// print formatted values on separate lines with formatted print per line
 };
 
 /*
@@ -110,8 +126,7 @@ enum textVerbosity {
 	TV_CONFIGS,						// returns prompt, messages and echo config commands. Gcode blocks are not echoed 
 	TV_VERBOSE						// returns all prompts, messages, configs and gcode blocks
 };
-*/
-/*
+
 enum jsonVerbosity {
 	JV_SILENT = 0,					// no response is provided for any command
 	JV_FOOTER,						// responses contain  footer only; no command echo, gcode blocks or messages
@@ -126,19 +141,28 @@ enum srVerbosity {					// status report enable and verbosity
 	SR_FILTERED,					// reports only values that have changed from the last report
 	SR_VERBOSE						// reports all values specified
 };
-*/
-enum jsonFormats {					// json output print modes
-	JSON_NO_PRINT = 0,				// don't print anything if you find yourself in JSON mode
-	JSON_OBJECT_FORMAT,				// print just the body as a json object
-	JSON_RESPONSE_FORMAT			// print the header/body/footer as a response object
-};
 
-enum textFormats {					// text output print modes
-	TEXT_NO_PRINT = 0,				// don't print anything if you find yourself in TEXT mode
-	TEXT_INLINE_PAIRS,				// print key:value pairs as comma separated pairs
-	TEXT_INLINE_VALUES,				// print values as commas separated values
-	TEXT_MULTILINE_FORMATTED		// print formatted values on separate lines with formatted print per line
+enum cmdType {						// classification of commands
+	CMD_TYPE_NULL = 0,
+	CMD_TYPE_CONFIG,				// configuration commands
+	CMD_TYPE_GCODE,					// gcode
+	CMD_TYPE_REPORT					// SR, QR and any other report
 };
+*/
+
+/**** operations flags and shorthand ****/
+
+#define F_INITIALIZE	0x01			// initialize this item (run set during initialization)
+#define F_PERSIST 		0x02			// persist this item when set is run
+#define F_NOSTRIP		0x04			// do not strip the group prefix from the token
+#define _f00			0x00
+#define _fin			F_INITIALIZE
+#define _fpe			F_PERSIST
+#define _fip			(F_INITIALIZE | F_PERSIST)
+#define _fns			F_NOSTRIP
+#define _f07			(F_INITIALIZE | F_PERSIST | F_NOSTRIP)
+
+/**** Structures ****/
 
 typedef struct cmdString {			// shared string object
 	uint8_t wp;						// current string array index
@@ -160,15 +184,27 @@ typedef struct cmdObject {			// depending on use, not all elements may be popula
 typedef uint8_t (*fptrCmd)(cmdObj_t *cmd);// required for cmd table access
 typedef void (*fptrPrint)(cmdObj_t *cmd);// required for PROGMEM access
 
-// static allocation and definitions
+typedef struct cfgItem {
+	char group[CMD_GROUP_LEN+1];		// group prefix (with NUL termination)
+	char token[CMD_TOKEN_LEN+1];		// token - stripped of group prefix (w/NUL termination)
+	uint8_t flags;						// operations flags - see defines below
+	const char *format;					// pointer to formatted print string
+	fptrPrint print;					// print binding: aka void (*print)(cmdObj_t *cmd);
+	fptrCmd get;						// GET binding aka uint8_t (*get)(cmdObj_t *cmd)
+	fptrCmd set;						// SET binding aka uint8_t (*set)(cmdObj_t *cmd)
+	double *target;						// target for writing config value
+	double def_value;					// default value for config item
+} cfgItem_t;
+
+/**** static allocation and definitions ****/
+
 cmdStr_t cmdStr;
 cmdObj_t cmd_list[CMD_LIST_LEN];	// JSON header element
 #define cmd_header cmd_list
 #define cmd_body  (cmd_list+1)
 
-/*
- * Global Scope Functions
- */
+
+/**** Global scope function prototypes ****/
 
 void cfg_init(void);
 uint8_t cfg_text_parser(char *str);
@@ -211,48 +247,7 @@ uint8_t cmd_write_NVM_value(cmdObj_t *cmd);
 void cfg_dump_NVM(const uint16_t start_record, const uint16_t end_record, char *label);
 #endif
 
-/**** Global scope config structures ****/
-
-typedef struct cfgParameters {
-	double fw_build;				// tinyg firmware build number
-	double fw_version;				// tinyg firmware version number
-	double hw_version;				// tinyg hardware compatibility
-
-	uint16_t nvm_base_addr;			// NVM base address
-	uint16_t nvm_profile_base;		// NVM base address of current profile
-
-	// communications settings		// these first 4 are shadow settigns for XIO cntrl bits
-//	uint8_t ignore_crlf;			// ignore CR or LF on RX
-//	uint8_t enable_cr;				// enable CR in CRFL expansion on TX
-//	uint8_t enable_echo;			// enable text-mode echo
-//	uint8_t enable_xon;				// enable XON/XOFF mode
-	uint8_t comm_mode;				// TG_TEXT_MODE or TG_JSON_MODE
-
-//	uint8_t json_verbosity;			// see enum in this file for settings
-//	uint8_t text_verbosity;			// see enum in this file for settings
-//	uint8_t usb_baud_rate;			// see xio_usart.h for XIO_BAUD values
-//	uint8_t usb_baud_flag;			// technically this belongs in the controller singleton
-
-//	uint8_t echo_json_footer;		// flags for JSON responses serialization
-//	uint8_t echo_json_configs;
-//	uint8_t echo_json_messages;
-//	uint8_t echo_json_linenum;
-//	uint8_t echo_json_gcode_block;
-
-//	uint8_t echo_text_prompt;		// flags for text mode response construction
-//	uint8_t echo_text_messages;
-//	uint8_t echo_text_configs;
-//	uint8_t echo_text_gcode_block;
-
-	// status report configs
-//	uint8_t status_report_verbosity;					// see enum in this file for settings
-//	uint32_t status_report_interval;					// in MS. set non-zero to enable
-//	index_t status_report_list[CMD_STATUS_REPORT_LEN];	// status report elements to report
-//	double status_report_value[CMD_STATUS_REPORT_LEN];	// previous values for filtered reporting
-
-} cfgParameters_t;
-cfgParameters_t cfg; 				// declared in the header to make it global
-
+/*** Unit tests ***/
 
 /* unit test setup */
 //#define __UNIT_TEST_CONFIG		// uncomment to enable config unit tests
