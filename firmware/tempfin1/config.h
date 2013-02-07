@@ -71,7 +71,7 @@ typedef uint8_t index_t;			// use this if there are < 256 indexed objects
 
 									// pre-allocated defines (take RAM permanently)
 #define CMD_SHARED_STRING_LEN 80	// shared string for string values
-#define CMD_BODY_LEN 12				// body elements - allow for 1 parent + N children
+#define CMD_BODY_LEN 16				// body elements - allow for 1 parent + N children
 									// (each body element takes 23 bytes of RAM)
 
 // Stuff you probably don't want to change 
@@ -164,22 +164,23 @@ enum cmdType {						// classification of commands
 
 /**** Structures ****/
 
-typedef struct cmdString {			// shared string object
-	uint8_t wp;						// current string array index
+typedef struct cmdString {				// shared string object
+	uint8_t wp;							// current string array index for len < 256 bytes
+//	uint16_t wp;						// use this value is string len > 255 bytes
 	char string[CMD_SHARED_STRING_LEN];
 } cmdStr_t;
 
-typedef struct cmdObject {			// depending on use, not all elements may be populated
-	struct cmdObject *pv;			// pointer to previous object or NULL if first object
-	struct cmdObject *nx;			// pointer to next object or NULL if last object
-	index_t index;					// index of tokenized name, or -1 if no token (optional)
-	int8_t depth;					// depth of object in the tree. 0 is root (-1 is invalid)
-	int8_t type;					// see cmdType
-	double value;					// numeric value
-	char token[CMD_TOKEN_LEN+1];	// full mnemonic token for lookup
-	char group[CMD_GROUP_LEN+1];	// group prefix or NUL if not in a group
-	char (*stringp)[];				// pointer to array of characters from shared character array
-} cmdObj_t; 						// OK, so it's not REALLY an object
+typedef struct cmdObject {				// depending on use, not all elements may be populated
+	struct cmdObject *pv;				// pointer to previous object or NULL if first object
+	struct cmdObject *nx;				// pointer to next object or NULL if last object
+	index_t index;						// index of tokenized name, or -1 if no token (optional)
+	int8_t depth;						// depth of object in the tree. 0 is root (-1 is invalid)
+	int8_t type;						// see cmdType
+	double value;						// numeric value
+	char token[CMD_TOKEN_LEN+1];		// full mnemonic token for lookup
+	char group[CMD_GROUP_LEN+1];		// group prefix or NUL if not in a group
+	char (*stringp)[];					// pointer to array of characters from shared character array
+} cmdObj_t; 							// OK, so it's not REALLY an object
 
 typedef uint8_t (*fptrCmd)(cmdObj_t *cmd);// required for cmd table access
 typedef void (*fptrPrint)(cmdObj_t *cmd);// required for PROGMEM access
@@ -199,10 +200,9 @@ typedef struct cfgItem {
 /**** static allocation and definitions ****/
 
 cmdStr_t cmdStr;
-cmdObj_t cmd_list[CMD_LIST_LEN];	// JSON header element
+cmdObj_t cmd_list[CMD_LIST_LEN];		// JSON header element
 #define cmd_header cmd_list
 #define cmd_body  (cmd_list+1)
-
 
 /**** Global scope function prototypes ****/
 
@@ -210,10 +210,10 @@ void cfg_init(void);
 uint8_t cfg_text_parser(char *str);
 
 // main entry points for core access functions
-uint8_t cmd_get(cmdObj_t *cmd);		// get value
-uint8_t cmd_set(cmdObj_t *cmd);		// set value
-void cmd_print(cmdObj_t *cmd);		// formatted print
-void cmd_persist(cmdObj_t *cmd);	// persistence
+uint8_t cmd_get(cmdObj_t *cmd);			// get value
+uint8_t cmd_set(cmdObj_t *cmd);			// set value
+void cmd_print(cmdObj_t *cmd);			// formatted print
+void cmd_persist(cmdObj_t *cmd);		// persistence
 
 // helpers
 index_t cmd_get_index(const char *group, const char *token);
@@ -250,7 +250,7 @@ void cfg_dump_NVM(const uint16_t start_record, const uint16_t end_record, char *
 /*** Unit tests ***/
 
 /* unit test setup */
-//#define __UNIT_TEST_CONFIG		// uncomment to enable config unit tests
+//#define __UNIT_TEST_CONFIG			// uncomment to enable config unit tests
 #ifdef __UNIT_TEST_CONFIG
 void cfg_unit_tests(void);
 #define	CONFIG_UNITS cfg_unit_tests();

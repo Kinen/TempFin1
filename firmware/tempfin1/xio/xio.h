@@ -70,6 +70,15 @@
  *	support _FDEV_ERR (which is -1) to be cascaded in returns to stdio functions.
  *	Not using ints in the right place is a bug generator if messing with this code.
  */
+/*
+ * --- Including devices or removing unused devices ---
+ * I'd like for this to be cleaner, but for now...
+ * To remove a device do the following
+ *	- comment out the entry in the xioDev enum
+ *	- comment out the device include file in this file
+ *	- comment out the device inits and opens in xio_init()
+ *	- remove the .c and .h files form the project
+ */
 #ifndef xio_h
 #define xio_h
 
@@ -134,10 +143,6 @@ typedef struct xioDEVICE {					// common device struct (one per dev)
 	uint8_t flag_in_line;					// used as a state variable for line reads
 	uint8_t flag_eol;						// end of line (message) detected
 	uint8_t flag_eof;						// end of file detected
-//	uint8_t flag_crlf;						// expand LFs to CR + LF on TX
-//	uint8_t flag_ignorecr;					// ignore CRs on RX
-//	uint8_t flag_ignorelf;					// ignore LFs on RX
-//	uint8_t flag_xoff;						// xon/xoff enabled
 
 	// gets() working data
 	int size;								// text buffer length (dynamic)

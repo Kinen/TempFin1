@@ -96,11 +96,11 @@ static void _controller()
 
 static uint8_t _dispatch()
 {
-	ritorno (xio_gets(kc.src, kc.in_buf, sizeof(kc.in_buf)));// read line or return if not completed
-	js_json_parser(kc.in_buf);
+	ritorno (xio_gets(kc.src, kc.buf, sizeof(kc.buf)));// read line or return if not completed
+	js_json_parser(kc.buf);
 	return (SC_OK);
 
-//	if ((status = xio_gets(kc.src, kc.in_buf, sizeof(kc.in_buf))) != SC_OK) {
+//	if ((status = xio_gets(kc.src, kc.buf, sizeof(kc.buf))) != SC_OK) {
 //		if (status == SC_EOF) {					// EOF can come from file devices only
 //			fprintf_P(stderr, PSTR("End of command file\n"));
 //			tg_reset_source();					// reset to default source

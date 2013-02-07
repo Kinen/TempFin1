@@ -338,8 +338,8 @@ uint16_t js_serialize_json(cmdObj_t *cmd, char *out_buf)
  */
 void js_print_json_object(cmdObj_t *cmd)
 {
-	js_serialize_json(cmd, kc.out_buf);
-	fprintf(stderr, "%s", kc.out_buf);
+	js_serialize_json(cmd, kc.buf);
+	fprintf(stderr, "%s", kc.buf);
 }
 
 /*

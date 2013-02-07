@@ -20,8 +20,9 @@
 
 // Kinen definitions and structs
 
-#define INPUT_BUFFER_LEN 128
-#define OUTPUT_BUFFER_LEN 128
+//#define INPUT_BUFFER_LEN 128
+//#define INPUT_BUFFER_LEN 128
+#define TEXT_BUFFER_LEN 128
 
 typedef struct kinenSingleton {		// main kinen control struct
 //	double version;					// kinen version number
@@ -29,11 +30,18 @@ typedef struct kinenSingleton {		// main kinen control struct
 	double null;					// dumping ground for items with no target
 	uint8_t src;					// active source device
 	uint8_t default_src;			// default source device
-	uint8_t linelen;				// length of currently processing line
+
+	uint8_t comm_mode;				// communications mode 1=JSON
+	uint16_t nvm_base_addr;			// NVM base address
+	uint16_t nvm_profile_base;		// NVM base address of current profile
+
+//	uint8_t linelen;				// length of currently processing line
 //	uint8_t led_state;				// 0=off, 1=on
 //	int32_t led_counter;			// a convenience for flashing an LED
-	char in_buf[INPUT_BUFFER_LEN];	// input text buffer
-	char out_buf[OUTPUT_BUFFER_LEN];// output text buffer
+//	char in_buf[INPUT_BUFFER_LEN];	// input text buffer
+//	char out_buf[OUTPUT_BUFFER_LEN];// output text buffer
+
+	char buf[TEXT_BUFFER_LEN];		// input/output text buffer
 } kinenSingleton_t;
 kinenSingleton_t kc;				// allocate kinen controller structure
 

@@ -22,6 +22,8 @@ util.c
 
 xio\xio.c
 
+xio\xio_file.c
+
 xio\xio_spi.c
 
 xio\xio_usart.c

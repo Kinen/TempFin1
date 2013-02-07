@@ -43,17 +43,17 @@ static void _print_nul(cmdObj_t *cmd);		// print nothing (no operation)
 
 static uint8_t _get_ui8(cmdObj_t *cmd);		// get uint8_t value
 static uint8_t _set_ui8(cmdObj_t *cmd);		// set uint8_t value
-static void _print_ui8(cmdObj_t *cmd);		// print unit8_t value
+//static void _print_ui8(cmdObj_t *cmd);		// print unit8_t value
 
 static uint8_t _get_int(cmdObj_t *cmd);		// get uint32_t integer value
 static uint8_t _set_int(cmdObj_t *cmd);		// set uint32_t integer value
-static void _print_int(cmdObj_t *cmd);		// print uint32_t integer value
+//static void _print_int(cmdObj_t *cmd);		// print uint32_t integer value
 
 static uint8_t _get_dbl(cmdObj_t *cmd);		// get double value
 static uint8_t _set_dbl(cmdObj_t *cmd);		// set double value
-static void _print_dbl(cmdObj_t *cmd);		// print double value
+//static void _print_dbl(cmdObj_t *cmd);		// print double value
 
-static void _print_str(cmdObj_t *cmd);		// print a string value
+//static void _print_str(cmdObj_t *cmd);		// print a string value
 
 // generic helper functions
 static uint8_t _set_defa(cmdObj_t *cmd);	// reset config to default values
@@ -146,9 +146,9 @@ void cmd_persist(cmdObj_t *cmd)
 void cfg_init()
 {
 	cmdObj_t *cmd = cmd_reset_list();
-	cfg.comm_mode = JSON_MODE;				// initial value until EEPROM is read
-//	cfg.nvm_base_addr = NVM_BASE_ADDR;
-//	cfg.nvm_profile_base = cfg.nvm_base_addr;
+	kc.comm_mode = JSON_MODE;				// initial value until EEPROM is read
+//	kc.nvm_base_addr = NVM_BASE_ADDR;
+//	kc.nvm_profile_base = cfg.nvm_base_addr;
 	cmd->value = true;
 	_set_defa(cmd);		// this subroutine called from here and from the $defa=1 command
 }
@@ -279,13 +279,14 @@ static uint8_t _set_ui8(cmdObj_t *cmd)
 	cmd->type = TYPE_INTEGER;
 	return(SC_OK);
 }
+/*
 static void _print_ui8(cmdObj_t *cmd)
 {
 	cmd_get(cmd);
 	char format[CMD_FORMAT_LEN+1];
 	fprintf(stderr, _get_format(cmd->index, format), (uint8_t)cmd->value);
 }
-
+*/
 static uint8_t _get_int(cmdObj_t *cmd)
 {
 	cmd->value = (double)*((uint32_t *)pgm_read_word(&cfgArray[cmd->index].target));
@@ -298,13 +299,14 @@ static uint8_t _set_int(cmdObj_t *cmd)
 	cmd->type = TYPE_INTEGER;
 	return(SC_OK);
 }
+/*
 static void _print_int(cmdObj_t *cmd)
 {
 	cmd_get(cmd);
 	char format[CMD_FORMAT_LEN+1];
 	fprintf(stderr, _get_format(cmd->index, format), (uint32_t)cmd->value);
 }
-
+*/
 static uint8_t _get_dbl(cmdObj_t *cmd)
 {
 	cmd->value = *((double *)pgm_read_word(&cfgArray[cmd->index].target));
@@ -317,20 +319,22 @@ static uint8_t _set_dbl(cmdObj_t *cmd)
 	cmd->type = TYPE_FLOAT;
 	return(SC_OK);
 }
+/*
 static void _print_dbl(cmdObj_t *cmd)
 {
 	cmd_get(cmd);
 	char format[CMD_FORMAT_LEN+1];
 	fprintf(stderr, _get_format(cmd->index, format), cmd->value);
 }
-
+*/
+/*
 static void _print_str(cmdObj_t *cmd)
 {
 	cmd_get(cmd);
 	char format[CMD_FORMAT_LEN+1];
 	fprintf(stderr, _get_format(cmd->index, format), *cmd->stringp);
 }
-
+*/
 /***************************************************************************** 
  * Accessors - get various data from an object given the index
  * _get_format() 	- return format string for an index
@@ -386,7 +390,7 @@ static uint8_t _get_grp(cmdObj_t *cmd)
 
 static uint8_t _set_grp(cmdObj_t *cmd)
 {
-	if (cfg.comm_mode == TEXT_MODE) return (SC_UNRECOGNIZED_COMMAND);
+	if (kc.comm_mode == TEXT_MODE) return (SC_UNRECOGNIZED_COMMAND);
 	for (uint8_t i=0; i<CMD_MAX_OBJECTS; i++) {
 		if ((cmd = cmd->nx) == NULL) break;
 		if (cmd->type == TYPE_EMPTY) break;
@@ -663,7 +667,7 @@ cmdObj_t *cmd_add_message_P(const char *string)	// conditionally add a message o
  */
 void cmd_print_list(uint8_t status, uint8_t text_flags, uint8_t json_flags)
 {
-	if (cfg.comm_mode == JSON_MODE) {
+	if (kc.comm_mode == JSON_MODE) {
 		switch (json_flags) {
 			case JSON_NO_PRINT: { break; } 
 			case JSON_OBJECT_FORMAT: { js_print_json_object(cmd_body); break; }

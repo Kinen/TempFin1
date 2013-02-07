@@ -71,6 +71,9 @@
     <Compile Include="config.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="config_data.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="heater.c">
       <SubType>compile</SubType>
     </Compile>
@@ -123,6 +126,12 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="xio\xio.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio_file.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="xio\xio_file.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="xio\xio_spi.c">

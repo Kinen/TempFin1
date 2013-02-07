@@ -97,6 +97,9 @@
 //#include <stdlib.h>
 //#include <math.h>
 
+#include "heater.h"
+#include "sensor.h"
+
 /***********************************************************************************
  **** APPLICATION_SPECIFIC CONFIG STRUCTURE(S) *************************************
  ***********************************************************************************
@@ -106,38 +109,6 @@ typedef struct cfgParameters {
 	double fw_build;				// tinyg firmware build number
 	double fw_version;				// tinyg firmware version number
 	double hw_version;				// tinyg hardware compatibility
-
-	uint16_t nvm_base_addr;			// NVM base address
-	uint16_t nvm_profile_base;		// NVM base address of current profile
-
-	// communications settings		// these first 4 are shadow settigns for XIO cntrl bits
-//	uint8_t ignore_crlf;			// ignore CR or LF on RX
-//	uint8_t enable_cr;				// enable CR in CRFL expansion on TX
-//	uint8_t enable_echo;			// enable text-mode echo
-//	uint8_t enable_xon;				// enable XON/XOFF mode
-	uint8_t comm_mode;				// TG_TEXT_MODE or TG_JSON_MODE
-
-//	uint8_t json_verbosity;			// see enum in this file for settings
-//	uint8_t text_verbosity;			// see enum in this file for settings
-//	uint8_t usb_baud_rate;			// see xio_usart.h for XIO_BAUD values
-//	uint8_t usb_baud_flag;			// technically this belongs in the controller singleton
-
-//	uint8_t echo_json_footer;		// flags for JSON responses serialization
-//	uint8_t echo_json_configs;
-//	uint8_t echo_json_messages;
-//	uint8_t echo_json_linenum;
-//	uint8_t echo_json_gcode_block;
-
-//	uint8_t echo_text_prompt;		// flags for text mode response construction
-//	uint8_t echo_text_messages;
-//	uint8_t echo_text_configs;
-//	uint8_t echo_text_gcode_block;
-
-	// status report configs
-//	uint8_t status_report_verbosity;					// see enum in this file for settings
-//	uint32_t status_report_interval;					// in MS. set non-zero to enable
-//	index_t status_report_list[CMD_STATUS_REPORT_LEN];	// status report elements to report
-//	double status_report_value[CMD_STATUS_REPORT_LEN];	// previous values for filtered reporting
 
 } cfgParameters_t;
 cfgParameters_t cfg; 				// declared in the header to make it global
@@ -174,22 +145,13 @@ static const char fmt_hv[] PROGMEM = "[hv]  hardware version%16.2f\n";
  ***********************************************************************************/
 
 /*
-static uint8_t _set_hv(cmdObj_t *cmd);		// set hardware version
-static uint8_t _get_sr(cmdObj_t *cmd);		// run status report (as data)
-static void _print_sr(cmdObj_t *cmd);		// run status report (as printout)
-static uint8_t _set_sr(cmdObj_t *cmd);		// set status report specification
-static uint8_t _set_si(cmdObj_t *cmd);		// set status report interval
-static uint8_t _get_id(cmdObj_t *cmd);		// get device ID
-static uint8_t _get_qr(cmdObj_t *cmd);		// run queue report (as data)
-static uint8_t _get_rx(cmdObj_t *cmd);		// get bytes in RX buffer
-
-static uint8_t _set_ic(cmdObj_t *cmd);		// ignore CR or LF on RX input
-static uint8_t _set_ec(cmdObj_t *cmd);		// expand CRLF on TX outout
-static uint8_t _set_ee(cmdObj_t *cmd);		// enable character echo
-static uint8_t _set_ex(cmdObj_t *cmd);		// enable XON/XOFF
-static uint8_t _set_baud(cmdObj_t *cmd);	// set USB baud rate
+static uint8_t _get_htmp(cmdObj_t *cmd)
+{
+	cmd->value = heater.temperature;
+	cmd->type = TYPE_FLOAT;
+	return (SC_OK);
+}
 */
-
 /***********************************************************************************
  **** CONFIG ARRAY *****************************************************************
  ***********************************************************************************
@@ -211,55 +173,51 @@ static uint8_t _set_baud(cmdObj_t *cmd);	// set USB baud rate
 
 const cfgItem_t cfgArray[] PROGMEM = {
 	// grp  token flags format*, print_func, get_func, set_func  target for get/set,   default value
-	{ "sys","fb", _f07, fmt_fb, _print_dbl, _get_dbl, _set_dbl, (double *)&cfg.fw_build,   BUILD_NUMBER }, // MUST BE FIRST!
-	{ "sys","fv", _f07, fmt_fv, _print_dbl, _get_dbl, _set_dbl, (double *)&cfg.fw_version, VERSION_NUMBER },
-	{ "sys","hv", _f07, fmt_hv, _print_dbl, _get_dbl, _set_dbl, (double *)&cfg.hw_version, HARDWARE_VERSION },
-//	{ "sys","id", _fns, fmt_id, _print_str, _get_id,  _set_nul, (double *)&kc.null, 0 },		// device ID (ASCII signature)
+	{ "sys","fb", _f07, fmt_fb, _print_nul, _get_dbl, _set_dbl, (double *)&cfg.fw_build,   BUILD_NUMBER }, // MUST BE FIRST!
+	{ "sys","fv", _f07, fmt_fv, _print_nul, _get_dbl, _set_dbl, (double *)&cfg.fw_version, VERSION_NUMBER },
+	{ "sys","hv", _f07, fmt_hv, _print_nul, _get_dbl, _set_dbl, (double *)&cfg.hw_version, HARDWARE_VERSION },
 
-	// Reports, tests, help, and messages
-//	{ "", "sr",  _f00, fmt_nul, _print_sr,  _get_sr,  _set_sr,  (double *)&kc.null, 0 },		// status report object
-//	{ "", "qr",  _f00, fmt_qr,  _print_int, _get_qr,  _set_nul, (double *)&kc.null, 0 },		// queue report setting
-//	{ "", "rx",  _f00, fmt_rx,  _print_int, _get_rx,  _set_nul, (double *)&kc.null, 0 },		// space in RX buffer
-//	{ "", "msg", _f00, fmt_str, _print_str, _get_nul, _set_nul, (double *)&kc.null, 0 },		// string for generic messages
-//	{ "", "test",_f00, fmt_nul, _print_nul, print_test_help, tg_test, (double *)&kc.test,0 },	// prints test help screen
-//	{ "", "defa",_f00, fmt_nul, _print_nul, print_defaults_help,_set_defa,(double *)&kc.null,0},// prints defaults help screen
-//	{ "", "boot",_f00, fmt_nul, _print_nul, print_boot_loader_help,_set_nul, (double *)&kc.null,0 },
-//	{ "", "help",_f00, fmt_nul, _print_nul, print_config_help,_set_nul, (double *)&kc.null,0 },	// prints config help screen
-//	{ "", "h",   _f00, fmt_nul, _print_nul, print_config_help,_set_nul, (double *)&kc.null,0 },	// alias for "help"
+	// Heater object
+	{ "h1", "h1st",  _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&heater.state, HEATER_OFF },
+	{ "h1", "h1tmp", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.temperature, LESS_THAN_ZERO },
+	{ "h1", "h1set", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.setpoint, HEATER_HYSTERESIS },
+	{ "h1", "h1hys", _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&heater.hysteresis, HEATER_HYSTERESIS },
+	{ "h1", "h1amb", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.ambient_temperature, HEATER_AMBIENT_TEMPERATURE },
+	{ "h1", "h1ovr", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.overheat_temperature, HEATER_OVERHEAT_TEMPERATURE },
+	{ "h1", "h1ato", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.ambient_timeout, HEATER_AMBIENT_TIMEOUT },
+	{ "h1", "h1reg", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.regulation_range, HEATER_REGULATION_RANGE },
+	{ "h1", "h1rto", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.regulation_timeout, HEATER_REGULATION_TIMEOUT },
+	{ "h1", "h1bad", _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&heater.bad_reading_max, HEATER_BAD_READING_MAX },
 
-	// System parameters
-	// NOTE: The ordering within the gcode defaults is important for token resolution
-	// NOTE: Some values have been removed from the system group but are still accessible as individual elements
-//	{ "sys","ic",  _f07, fmt_ic, _print_ui8, _get_ui8, _set_ic,  (double *)&cfg.ignore_crlf,		COM_IGNORE_CRLF },
-//	{ "sys","ec",  _f07, fmt_ec, _print_ui8, _get_ui8, _set_ec,  (double *)&cfg.enable_cr,			COM_EXPAND_CR },
-//	{ "sys","ee",  _f07, fmt_ee, _print_ui8, _get_ui8, _set_ee,  (double *)&cfg.enable_echo,		COM_ENABLE_ECHO },
-//	{ "sys","ex",  _f07, fmt_ex, _print_ui8, _get_ui8, _set_ex,  (double *)&cfg.enable_xon,			COM_ENABLE_XON },
-//	{ "sys","eq",  _f07, fmt_eq, _print_ui8, _get_ui8, _set_ui8, (double *)&cfg.enable_qr,			QR_VERBOSITY },
-//	{ "sys","ej",  _f07, fmt_ej, _print_ui8, _get_ui8, _set_ui8, (double *)&cfg.comm_mode,			COMM_MODE },
-//	{ "sys","jv",  _f07, fmt_jv, _print_ui8, _get_ui8, cmd_set_jv,(double *)&cfg.json_verbosity,	JSON_VERBOSITY },
-//	{ "sys","tv",  _f07, fmt_tv, _print_ui8, _get_ui8, cmd_set_tv,(double *)&cfg.text_verbosity,	TEXT_VERBOSITY },
-//	{ "sys","si",  _f07, fmt_si, _print_dbl, _get_int, _set_si,  (double *)&cfg.status_report_interval,STATUS_REPORT_INTERVAL_MS },
-//	{ "sys","sv",  _f07, fmt_sv, _print_ui8, _get_ui8, _set_ui8, (double *)&cfg.status_report_verbosity,SR_VERBOSITY },
-//	{ "sys","baud",_fns, fmt_baud,_print_ui8,_get_ui8, _set_baud,(double *)&cfg.usb_baud_rate,		XIO_BAUD_115200 },
+	// Sensor object
+	{ "s1", "s1st",  _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&sensor.state, SENSOR_OFF },
+	{ "s1", "s1tmp", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&sensor.temperature, LESS_THAN_ZERO },
+	{ "s1", "s1svm", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&sensor.sample_variance_max, SENSOR_SAMPLE_VARIANCE_MAX },
+	{ "s1", "s1rvm", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&sensor.reading_variance_max, SENSOR_READING_VARIANCE_MAX },
 
-	// Persistence for status report - must be in sequence
-	// *** Count must agree with CMD_STATUS_REPORT_LEN in config.h ***
-//	{ "","se00",_fpe, fmt_nul, _print_nul, _get_int, _set_int,(double *)&cfg.status_report_list[0],0 },
-//	{ "","se01",_fpe, fmt_nul, _print_nul, _get_int, _set_int,(double *)&cfg.status_report_list[1],0 },
-//	{ "","se02",_fpe, fmt_nul, _print_nul, _get_int, _set_int,(double *)&cfg.status_report_list[2],0 },
-//	{ "","se03",_fpe, fmt_nul, _print_nul, _get_int, _set_int,(double *)&cfg.status_report_list[3],0 },
+	// PID object
+//	{ "p1", "p1st",  _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&pid.state, 0 },
+	{ "p1", "p1kp",	 _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.Kp, PID_Kp },
+	{ "p1", "p1ki",	 _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.Ki, PID_Ki },
+	{ "p1", "p1kd",	 _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.Kd, PID_Kd },
+	{ "p1", "p1smx", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.output_max, PID_MAX_OUTPUT },
+	{ "p1", "p1smn", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.output_min, PID_MIN_OUTPUT },
 
 	// Group lookups - must follow the single-valued entries for proper sub-string matching
 	// *** Must agree with CMD_COUNT_GROUPS below ****
 	{ "","sys",_f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 },	// system group
-	{ "","sys",_f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 },	// system group
-
+	{ "","h1", _f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 },	// heater group
+	{ "","s1", _f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 },	// sensor group
+	{ "","p1", _f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 }		// PID group
+//																				   ^  watch the final (missing) comma!
 	// Uber-group (groups of groups, for text-mode displays only)
 	// *** Must agree with CMD_COUNT_UBER_GROUPS below ****
-	{ "", "$", _f00, fmt_nul, _print_nul, _get_nul, _set_nul,(double *)&kc.null,0 }
+//	{ "", "$", _f00, fmt_nul, _print_nul, _get_nul, _set_nul,(double *)&kc.null,0 }
 };
 
-#define CMD_COUNT_GROUPS 		1		// count of simple groups
+/***** Make sure these defines line up with any changes in the above table *****/
+
+#define CMD_COUNT_GROUPS 		4		// count of simple groups
 #define CMD_COUNT_UBER_GROUPS 	0 		// count of uber-groups
 
 #define CMD_INDEX_MAX (sizeof cfgArray / sizeof(cfgItem_t))

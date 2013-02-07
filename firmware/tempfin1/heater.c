@@ -20,21 +20,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <string.h>				// for memset
-#include <avr/pgmspace.h>
+#include <string.h>
 #include <math.h>
-//#include <avr/io.h>
-//#include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 
 #include "kinen.h"
 #include "system.h"
 #include "heater.h"
 #include "sensor.h"
 #include "report.h"
-
-//#include "tempfin1.h"
-//#include "util.h"
-//#include "xio/xio.h"
 
 /**** Heater Functions ****/
 /*
