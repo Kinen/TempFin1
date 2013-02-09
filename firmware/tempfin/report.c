@@ -24,7 +24,7 @@
 #include "report.h"
 #include "sensor.h"
 #include "heater.h"
-//#include "tempfin1.h"
+//#include "tempfin.h"
 //#include "xio/xio.h"
 
 /*** Strings and string arrays in program memory ***/

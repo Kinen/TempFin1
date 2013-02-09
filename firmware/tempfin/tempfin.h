@@ -14,8 +14,8 @@
  */
 /* Special thanks to Adam Mayer and the Replicator project for heater guidance
  */
-#ifndef tempfin1_h
-#define tempfin1_h
+#ifndef tempfin_h
+#define tempfin_h
 
 #define BUILD_NUMBER 		006.03			// Adding in config subsystem and JSON
 #define VERSION_NUMBER		0.1				// firmware major version

@@ -24,7 +24,7 @@
 #include <avr/interrupt.h>
 
 #include "kinen.h"
-#include "tempfin1.h"
+#include "tempfin.h"
 #include "system.h"
 #include "heater.h"
 #include "sensor.h"
