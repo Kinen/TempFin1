@@ -110,7 +110,7 @@ void xio_init()
 	// run device constructors and register devices in dev array
 	ds[XIO_DEV_USART] = xio_init_usart(XIO_DEV_USART);
 	ds[XIO_DEV_SPI]   = xio_init_spi(XIO_DEV_SPI);
-	ds[XIO_DEV_PGM]   = xio_init_file(XIO_DEV_PGM);
+//	ds[XIO_DEV_PGM]   = xio_init_file(XIO_DEV_PGM);
 
 	// open individual devices (file device opens occur at time-of-use)
 	xio_open(XIO_DEV_USART, NULL, USART_XIO_FLAGS);
