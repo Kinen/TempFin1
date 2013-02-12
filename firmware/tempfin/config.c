@@ -38,6 +38,7 @@
 //extern const char fmt_hv[];
 //extern const char fmt_id[];
 
+extern const cfgItem_t cfgArray[];	// found in contig_app.c
 
 /***********************************************************************************
  **** GENERIC STATICS **************************************************************
@@ -66,8 +67,6 @@ const char fmt_fb[] PROGMEM = "[fb]  firmware build%18.2f\n";
 const char fmt_hv[] PROGMEM = "[hv]  hardware version%16.2f\n";
 //const char fmt_id[] PROGMEM = "[id]  TinyG ID%30s\n";
 #endif
-
-
 
 
 /***********************************************************************************
