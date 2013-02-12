@@ -4,6 +4,10 @@
 
 config.c
 
+config_app.c
+
+config_textmode.c
+
 heater.c
 
 json_parser.c
