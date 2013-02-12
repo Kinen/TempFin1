@@ -57,16 +57,19 @@
 #define config_h
 
 /***********************************************************************************
- **** DEFINITIONS AND SIZING *******************************************************
+ **** COMPILER SWITCHES ************************************************************
  ***********************************************************************************/
+// Comment out what you don't need to skinny down the FLASH / RAM footprint
 
-// Stuff you may want to change
-// Compile switches - comment out what you don't need to skinny down the FLASH / RAM footprint
-#define __ENABLE_TEXTMODE
+//#define __ENABLE_TEXTMODE
 #define __ENABLE_PERSISTENCE
 #define __ENABLE_USART_DEVICE
 #define __ENABLE_SPI_DEVICE
 #define __ENABLE_PGM_FILE_DEVICE
+
+/***********************************************************************************
+ **** DEFINITIONS AND SIZING *******************************************************
+ ***********************************************************************************/
 
 // Sizing and footprints			// chose one based on # of elements in cmdArray
 typedef uint8_t index_t;			// use this if there are < 256 indexed objects
@@ -125,7 +128,6 @@ enum textFormats {					// text output print modes
 	TEXT_MULTILINE_FORMATTED		// print formatted values on separate lines with formatted print per line
 };
 
-/*
 enum textVerbosity {
 	TV_SILENT = 0,					// no response is provided
 	TV_PROMPT,						// returns prompt only and exception messages
@@ -148,14 +150,6 @@ enum srVerbosity {					// status report enable and verbosity
 	SR_FILTERED,					// reports only values that have changed from the last report
 	SR_VERBOSE						// reports all values specified
 };
-
-enum cmdType {						// classification of commands
-	CMD_TYPE_NULL = 0,
-	CMD_TYPE_CONFIG,				// configuration commands
-	CMD_TYPE_GCODE,					// gcode
-	CMD_TYPE_REPORT					// SR, QR and any other report
-};
-*/
 
 /**** operations flags and shorthand ****/
 
@@ -196,8 +190,10 @@ typedef struct cfgItem {
 	char group[CMD_GROUP_LEN+1];		// group prefix (with NUL termination)
 	char token[CMD_TOKEN_LEN+1];		// token - stripped of group prefix (w/NUL termination)
 	uint8_t flags;						// operations flags - see defines below
-	const char *format;					// pointer to formatted print string
+  #ifdef __ENABLE_TEXTMODE
+  	const char *format;					// pointer to formatted print string
 	fptrPrint print;					// print binding: aka void (*print)(cmdObj_t *cmd);
+  #endif
 	fptrCmd get;						// GET binding aka uint8_t (*get)(cmdObj_t *cmd)
 	fptrCmd set;						// SET binding aka uint8_t (*set)(cmdObj_t *cmd)
 	double *target;						// target for writing config value
@@ -221,10 +217,16 @@ uint8_t cmd_set(cmdObj_t *cmd);			// main entry point for set value
 
 // helpers
 index_t cmd_get_index(const char *group, const char *token);
-uint8_t cmd_get_type(cmdObj_t *cmd);
-uint8_t cmd_set_jv(cmdObj_t *cmd);
-uint8_t cmd_set_tv(cmdObj_t *cmd);
-uint8_t cmd_persist_offsets(uint8_t flag);
+uint8_t cmd_index_lt_max(index_t index);
+uint8_t cmd_index_is_single(index_t index);
+uint8_t cmd_index_is_group(index_t index);
+uint8_t cmd_index_lt_groups(index_t index);
+uint8_t cmd_group_is_prefixed(char *group);
+
+//uint8_t cmd_get_type(cmdObj_t *cmd);
+//uint8_t cmd_set_jv(cmdObj_t *cmd);
+//uint8_t cmd_set_tv(cmdObj_t *cmd);
+//uint8_t cmd_persist_offsets(uint8_t flag);
 
 // generic internal functions
 uint8_t _get_nul(cmdObj_t *cmd);		// get null value type
@@ -253,10 +255,7 @@ cmdObj_t *cmd_add_string(char *token, const char *string);
 cmdObj_t *cmd_add_string_P(char *token, const char *string);
 cmdObj_t *cmd_add_message(const char *string);
 cmdObj_t *cmd_add_message_P(const char *string);
-
 void cmd_print_list(uint8_t status, uint8_t text_flags, uint8_t json_flags);
-uint8_t cmd_group_is_prefixed(char *group);
-uint8_t cmd_index_is_group(index_t index);
 
 // PERSISTENCE SUPPORT
 #ifdef __ENABLE_PERSISTENCE

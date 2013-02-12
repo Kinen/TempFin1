@@ -31,6 +31,8 @@
 #include "system.h"
 #include "xio/xio.h"
 
+#ifdef __ENABLE_TEXTMODE
+
 extern const cfgItem_t cfgArray[];
 static uint8_t _text_parser(char *str, cmdObj_t *c);
 
@@ -116,7 +118,6 @@ static uint8_t _text_parser(char *str, cmdObj_t *cmd)
 	}
 	return (SC_OK);
 }
-
 
 /***************************************************************************** 
  * Accessors - get various data from an object given the index
@@ -212,5 +213,5 @@ void cmd_print_text_multiline_formatted()
 		if (cmd->type == TYPE_EMPTY) { break;}
 	}
 }
-
+#endif
 

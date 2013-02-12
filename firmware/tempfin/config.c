@@ -12,10 +12,10 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-/*	See config_data.h for an overview of the config system and it's use.
+/*	See config_app.h for an overview of the config system and it's use.
  */
-#include <ctype.h>
-#include <stdlib.h>
+//#include <ctype.h>
+//#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -24,134 +24,22 @@
 #include "kinen.h"			// config reaches into almost everything
 #include "tempfin.h"
 #include "config.h"
-#include "config_app.h"		// application-specific config stuff
+#include "config_app.h"		// application-specific config stuff - follows config.h
 #include "json_parser.h"
-#include "report.h"
 #include "util.h"
-#include "system.h"
 #include "xio/xio.h"
-
-
-//extern const char fmt_nul[];
-//extern const char fmt_fb[];
-//extern const char fmt_fv[];
-//extern const char fmt_hv[];
-//extern const char fmt_id[];
+//#include "report.h"
+//#include "system.h"
 
 extern const cfgItem_t cfgArray[];	// found in contig_app.c
 
 /***********************************************************************************
  **** GENERIC STATICS **************************************************************
- ***********************************************************************************
- * Contains function prototypes and other declarations that are not application
- * specific and are needed to support the config_data definitions that follow
- */
+ ***********************************************************************************/
+
 typedef char PROGMEM *prog_char_ptr;		// access to PROGMEM arrays of PROGMEM strings
-// generic helper functions
 static uint8_t _set_defa(cmdObj_t *cmd);	// reset config to default values
 //static void _do_group_list(cmdObj_t *cmd, char list[][CMD_TOKEN_LEN+1]); // helper to print multiple groups in a list
-
-/* 
- * PROGMEM strings for print formatting
- * NOTE: DO NOT USE TABS IN FORMAT STRINGS
- */
-#ifdef __ENABLE_TEXTMODE
-const char fmt_nul[] PROGMEM = "";
-const char fmt_ui8[] PROGMEM = "%d\n";	// generic format for ui8s
-const char fmt_dbl[] PROGMEM = "%f\n";	// generic format for doubles
-const char fmt_str[] PROGMEM = "%s\n";	// generic format for string message (with no formatting)
-
-// System group and ungrouped formatting strings
-const char fmt_fv[] PROGMEM = "[fv]  firmware version%16.2f\n";
-const char fmt_fb[] PROGMEM = "[fb]  firmware build%18.2f\n";
-const char fmt_hv[] PROGMEM = "[hv]  hardware version%16.2f\n";
-//const char fmt_id[] PROGMEM = "[id]  TinyG ID%30s\n";
-#endif
-
-
-/***********************************************************************************
- **** APPLICATION-SPECIFIC DATA ****************************************************
- ***********************************************************************************
- **** CONFIG ARRAY ****
- *
- *	NOTES:
- *	- Token matching occurs from the most specific to the least specific.
- *	  This means that if shorter tokens overlap longer ones the longer one
- *	  must precede the shorter one. E.g. "gco" needs to come before "gc"
- *
- *	- Mark group strings for entries that have no group as nul -->" ". 
- *	  This is important for group expansion.
- *
- *	- Groups do not have groups. Neither do uber-groups, e.g.
- *	  'x' is --> { "", "x",  	and 'm' is --> { "", "m", 
- *
- *	NOTE: If the count of lines in cfgArray exceeds 255 you need to change index_t 
- *	uint16_t in the config.h file.
- */
-
-const cfgItem_t cfgArray[] PROGMEM = {
-	// grp  token flags format*, print_func, get_func, set_func  target for get/set,   default value
-	{ "sys","fb", _f07, fmt_fb, _print_nul, _get_dbl, _set_dbl, (double *)&cfg.fw_build,   BUILD_NUMBER }, // MUST BE FIRST!
-	{ "sys","fv", _f07, fmt_fv, _print_nul, _get_dbl, _set_dbl, (double *)&cfg.fw_version, VERSION_NUMBER },
-	{ "sys","hv", _f07, fmt_hv, _print_nul, _get_dbl, _set_dbl, (double *)&cfg.hw_version, HARDWARE_VERSION },
-
-	// Heater object
-	{ "h1", "h1st",  _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&heater.state, HEATER_OFF },
-	{ "h1", "h1tmp", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.temperature, LESS_THAN_ZERO },
-	{ "h1", "h1set", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.setpoint, HEATER_HYSTERESIS },
-	{ "h1", "h1hys", _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&heater.hysteresis, HEATER_HYSTERESIS },
-	{ "h1", "h1amb", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.ambient_temperature, HEATER_AMBIENT_TEMPERATURE },
-	{ "h1", "h1ovr", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.overheat_temperature, HEATER_OVERHEAT_TEMPERATURE },
-	{ "h1", "h1ato", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.ambient_timeout, HEATER_AMBIENT_TIMEOUT },
-	{ "h1", "h1reg", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.regulation_range, HEATER_REGULATION_RANGE },
-	{ "h1", "h1rto", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&heater.regulation_timeout, HEATER_REGULATION_TIMEOUT },
-	{ "h1", "h1bad", _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&heater.bad_reading_max, HEATER_BAD_READING_MAX },
-
-	// Sensor object
-	{ "s1", "s1st",  _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&sensor.state, SENSOR_OFF },
-	{ "s1", "s1tmp", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&sensor.temperature, LESS_THAN_ZERO },
-	{ "s1", "s1svm", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&sensor.sample_variance_max, SENSOR_SAMPLE_VARIANCE_MAX },
-	{ "s1", "s1rvm", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&sensor.reading_variance_max, SENSOR_READING_VARIANCE_MAX },
-
-	// PID object
-//	{ "p1", "p1st",  _f00, fmt_nul, _print_nul, _get_ui8, _set_ui8,(double *)&pid.state, 0 },
-	{ "p1", "p1kp",	 _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.Kp, PID_Kp },
-	{ "p1", "p1ki",	 _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.Ki, PID_Ki },
-	{ "p1", "p1kd",	 _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.Kd, PID_Kd },
-	{ "p1", "p1smx", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.output_max, PID_MAX_OUTPUT },
-	{ "p1", "p1smn", _f00, fmt_nul, _print_nul, _get_dbl, _set_dbl,(double *)&pid.output_min, PID_MIN_OUTPUT },
-
-	// Group lookups - must follow the single-valued entries for proper sub-string matching
-	// *** Must agree with CMD_COUNT_GROUPS below ****
-	{ "","sys",_f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 },	// system group
-	{ "","h1", _f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 },	// heater group
-	{ "","s1", _f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 },	// sensor group
-	{ "","p1", _f00, fmt_nul, _print_nul, _get_grp, _set_grp,(double *)&kc.null,0 }		// PID group
-//																				   ^  watch the final (missing) comma!
-	// Uber-group (groups of groups, for text-mode displays only)
-	// *** Must agree with CMD_COUNT_UBER_GROUPS below ****
-//	{ "", "$", _f00, fmt_nul, _print_nul, _get_nul, _set_nul,(double *)&kc.null,0 }
-};
-
-/***** Make sure these defines line up with any changes in the above table *****/
-
-#define CMD_COUNT_GROUPS 		4		// count of simple groups
-#define CMD_COUNT_UBER_GROUPS 	0 		// count of uber-groups
-
-#define CMD_INDEX_MAX (sizeof cfgArray / sizeof(cfgItem_t))
-//#define CMD_INDEX_END_SINGLES		(CMD_INDEX_MAX - CMD_COUNT_UBER_GROUPS - CMD_COUNT_GROUPS - CMD_STATUS_REPORT_LEN)
-#define CMD_INDEX_END_SINGLES		(CMD_INDEX_MAX - CMD_COUNT_UBER_GROUPS - CMD_COUNT_GROUPS)
-#define CMD_INDEX_START_GROUPS		(CMD_INDEX_MAX - CMD_COUNT_UBER_GROUPS - CMD_COUNT_GROUPS)
-#define CMD_INDEX_START_UBER_GROUPS (CMD_INDEX_MAX - CMD_COUNT_UBER_GROUPS)
-
-// some evaluators that flow from the data file:
-#define _index_is_single(i) ((i <= CMD_INDEX_END_SINGLES) ? true : false)
-#define _index_lt_groups(i) ((i <= CMD_INDEX_START_GROUPS) ? true : false)
-#define _index_is_group(i) (((i >= CMD_INDEX_START_GROUPS) && (i < CMD_INDEX_START_UBER_GROUPS)) ? true : false)
-#define _index_is_uber(i)   ((i >= CMD_INDEX_START_UBER_GROUPS) ? true : false)
-#define _index_is_group_or_uber(i) ((i >= CMD_INDEX_START_GROUPS) ? true : false)
-uint8_t cmd_index_is_group(index_t index) { return _index_is_group(index);}
-//index_t cmd_get_max_index() { return (CMD_INDEX_MAX);}
 
 /***********************************************************************************
  **** CMD FUNCTION ENTRY POINTS ****************************************************
@@ -162,28 +50,24 @@ uint8_t cmd_index_is_group(index_t index) { return _index_is_group(index);}
  * cmd_set() 	- Write a value or invoke a function - operates on single valued elements or groups
  * cmd_get() 	- Build a cmdObj with the values from the target & return the value
  *			   	  Populate cmd body with single valued elements or groups (iterates)
- * cmd_print()	- Output a formatted string for the value.
  * cmd_persist()- persist value to NVM. Takes special cases into account
  */
-
-#define ASSERT_CMD_INDEX(a) if (cmd->index >= CMD_INDEX_MAX) return (a);
-
 uint8_t cmd_set(cmdObj_t *cmd)
 {
-	ASSERT_CMD_INDEX(SC_UNRECOGNIZED_COMMAND);
+	ritorno(cmd_index_lt_max(cmd->index));	// validate index or return
 	return (((fptrCmd)(pgm_read_word(&cfgArray[cmd->index].set)))(cmd));
 }
 
 uint8_t cmd_get(cmdObj_t *cmd)
 {
-	ASSERT_CMD_INDEX(SC_UNRECOGNIZED_COMMAND);
+	ritorno(cmd_index_lt_max(cmd->index));	// validate index or return
 	return (((fptrCmd)(pgm_read_word(&cfgArray[cmd->index].get)))(cmd));
 }
 
 void cmd_persist(cmdObj_t *cmd)
 {
 #ifdef __ENABLE_PERSISTENCE	
-	if (_index_lt_groups(cmd->index) == false) return;
+	if (cmd_index_lt_groups(cmd->index) == false) return;
 	if (pgm_read_byte(&cfgArray[cmd->index].flags) & F_PERSIST) {
 		cmd_write_NVM_value(cmd);
 	}
@@ -216,12 +100,12 @@ static uint8_t _set_defa(cmdObj_t *cmd)
 {
 	if (cmd->value != true) { return (SC_OK);}	// failsafe. Must set true or no action occurs
 //	rpt_print_initializing_message();
-	for (cmd->index=0; _index_is_single(cmd->index); cmd->index++) {
+	for (cmd->index=0; cmd_index_is_single(cmd->index); cmd->index++) {
 		if (pgm_read_byte(&cfgArray[cmd->index].flags) & F_INITIALIZE) {
 			cmd->value = (double)pgm_read_float(&cfgArray[cmd->index].def_value);
 			strcpy_P(cmd->token, cfgArray[cmd->index].token);
 			cmd_set(cmd);
-//			cmd_persist(cmd);
+			cmd_persist(cmd);
 		}
 	}
 	return (SC_OK);
@@ -284,7 +168,6 @@ uint8_t _set_dbl(cmdObj_t *cmd)
 	return(SC_OK);
 }
 
-
 /********************************************************************************
  * Group operations
  *
@@ -309,7 +192,8 @@ uint8_t _get_grp(cmdObj_t *cmd)
 	char *parent_group = cmd->token;		// token in the parent cmd object is the group
 	char group[CMD_GROUP_LEN+1];			// group string retrieved from cfgArray child
 	cmd->type = TYPE_PARENT;				// make first object the parent 
-	for (index_t i=0; i<=CMD_INDEX_END_SINGLES; i++) {
+//	for (index_t i=0; i<=CMD_INDEX_END_SINGLES; i++) {
+	for (index_t i=0; cmd_index_is_single(i); i++) {
 		strcpy_P(group, cfgArray[i].group);  // don't need strncpy as it's always terminated
 		if (strcmp(parent_group, group) != 0) continue;
 		(++cmd)->index = i;
@@ -378,7 +262,8 @@ index_t cmd_get_index(const char *group, const char *token)
 	strcpy(str, group);
 	strcat(str, token);
 
-	for (index_t i=0; i<CMD_INDEX_MAX; i++) {
+//	for (index_t i=0; i<CMD_INDEX_MAX; i++) {
+	for (index_t i=0; cmd_index_lt_max(i); i++) {
 		if ((c = (char)pgm_read_byte(&cfgArray[i].token[0])) != str[0]) {	// 1st character mismatch 
 			continue;
 		}
@@ -427,7 +312,7 @@ index_t cmd_get_index(const char *group, const char *token)
 
 void cmd_get_cmdObj(cmdObj_t *cmd)
 {
-	if (cmd->index >= CMD_INDEX_MAX) return;
+	if (cmd_index_lt_max(cmd->index)) { return;}
 	index_t tmp = cmd->index;
 	cmd_reset_obj(cmd);
 	cmd->index = tmp;
@@ -626,6 +511,7 @@ void cmd_print_list(uint8_t status, uint8_t text_flags, uint8_t json_flags)
 			case JSON_OBJECT_FORMAT: { js_print_json_object(cmd_body); break; }
 			case JSON_RESPONSE_FORMAT: { js_print_json_response(status); break; }
 		}
+#ifdef __ENABLE_TEXTMODE
 	} else {
 		switch (text_flags) {
 			case TEXT_NO_PRINT: { break; } 
@@ -633,6 +519,7 @@ void cmd_print_list(uint8_t status, uint8_t text_flags, uint8_t json_flags)
 			case TEXT_INLINE_VALUES: { cmd_print_text_inline_values(); break; }
 			case TEXT_MULTILINE_FORMATTED: { cmd_print_text_multiline_formatted();}
 		}
+#endif
 	}
 }
 

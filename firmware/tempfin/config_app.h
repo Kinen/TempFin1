@@ -89,14 +89,6 @@
  */
 
 /***********************************************************************************
- **** MORE INCLUDE FILES ***********************************************************
- ***********************************************************************************
- * Depending on what's in your functions you may require more include files here
- */
-#include "heater.h"
-#include "sensor.h"
-
-/***********************************************************************************
  **** APPLICATION_SPECIFIC CONFIG STRUCTURE(S) *************************************
  ***********************************************************************************
  * Define the cfg structures(s) used by the application
@@ -112,31 +104,18 @@ cfgParameters_t cfg; 				// declared in the header to make it global
 /***********************************************************************************
  **** PROGRAM MEMORY STRINGS AND STRING ARRAYS *************************************
  ***********************************************************************************/
-
-/* strings used by formatted print functions */
-
-static const char msg_units0[] PROGMEM = " in";	// used by generic print functions
-static const char msg_units1[] PROGMEM = " mm";
-static const char msg_units2[] PROGMEM = " deg";
-static PGM_P const msg_units[] PROGMEM = { msg_units0, msg_units1, msg_units2 };
-#define F_DEG 2
-
-
 /* PROGMEM strings for print formatting
  * NOTE: DO NOT USE TABS IN FORMAT STRINGS
  */
- /*
-static const char fmt_nul[] PROGMEM = "";
-static const char fmt_ui8[] PROGMEM = "%d\n";	// generic format for ui8s
-static const char fmt_dbl[] PROGMEM = "%f\n";	// generic format for doubles
-static const char fmt_str[] PROGMEM = "%s\n";	// generic format for string message (with no formatting)
 
-// System group and ungrouped formatting strings
-static const char fmt_fv[] PROGMEM = "[fv]  firmware version%16.2f\n";
-static const char fmt_fb[] PROGMEM = "[fb]  firmware build%18.2f\n";
-static const char fmt_hv[] PROGMEM = "[hv]  hardware version%16.2f\n";
-//static const char fmt_id[] PROGMEM = "[id]  TinyG ID%30s\n";
-*/
+#ifdef __ENABLE_TEXTMODE
+//static const char msg_units0[] PROGMEM = " in";	// used by generic print functions
+//static const char msg_units1[] PROGMEM = " mm";
+//static const char msg_units2[] PROGMEM = " deg";
+//static PGM_P const msg_units[] PROGMEM = { msg_units0, msg_units1, msg_units2 };
+//#define F_DEG 2
+#endif // __ENABLE_TEXTMODE
+
 /***********************************************************************************
  **** FUNCTIONS AND PROTOTYPES *****************************************************
  ***********************************************************************************/
@@ -149,3 +128,5 @@ static uint8_t _get_htmp(cmdObj_t *cmd)
 	return (SC_OK);
 }
 */
+
+
